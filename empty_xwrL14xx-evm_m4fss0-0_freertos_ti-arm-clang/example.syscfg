@@ -15,6 +15,8 @@ scripting.excludeFromBuild("ti_cli_mmwave_demo_config.h");
 /**
  * Import the modules used in this configuration.
  */
+const hwa        = scripting.addModule("/drivers/hwa/hwa", {}, false);
+const hwa1       = hwa.addInstance();
 const debug_log  = scripting.addModule("/kernel/dpl/debug_log");
 const mpu_armv7  = scripting.addModule("/kernel/dpl/mpu_armv7", {}, false);
 const mpu_armv71 = mpu_armv7.addInstance();
@@ -24,6 +26,8 @@ const mpu_armv73 = mpu_armv7.addInstance();
 /**
  * Write custom configuration values to the imported modules.
  */
+hwa1.$name = "CONFIG_HWA0";
+
 debug_log.enableUartLog           = true;
 debug_log.uartLog.$name           = "CONFIG_UART0";
 debug_log.uartLog.UART.RX.$assign = "PAD_AP";

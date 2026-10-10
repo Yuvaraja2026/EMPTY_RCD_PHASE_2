@@ -3,9 +3,9 @@
 #include "ti_drivers_open_close.h"
 #include "ti_board_open_close.h"
 #include <kernel/dpl/DebugP.h>
-#include <drivers/uart.h>
 #include "FreeRTOS.h"
 #include "task.h"
+#include "hwa.h"
 
 #define MAIN_TASK_PRI (configMAX_PRIORITIES - 1U)                   /* Sets the main task priority to one less than the maximum allowed priority */
 
@@ -17,15 +17,9 @@ TaskHandle_t gMainTask;     /* Declares a task handle used to reference and mana
 
 static void MinimalApp_task(void *args)
 {
-    UART_Transaction transaction;       /* Declares a UART transaction structure to store the transmission details */
-    uint8_t message[] ="FreeRTOS task is running\r\n";
     Drivers_open();         /* Open and initialize the required drivers so that the software can communicate */
     Board_driversOpen();    /* Open the board-specific drivers */
-    DebugP_log("Drivers_open and Board_driversOpen!!\r\n");
-    UART_Transaction_init(&transaction);    /* Initializes the UART transaction structure */
-    transaction.buf=message;                /* Assigns the message buffer to the UART transaction */
-    transaction.count=sizeof(message)-1;    /* Sets the number of bytes to transmit, excluding the null terminator */
-    UART_write(gUartHandle[0], &transaction);/* Transmits the message through the UART interface using UART handle 0 */
+    MinimalRadar_runStage();
 }
 int main(void)
 {
@@ -41,7 +35,9 @@ int main(void)
             MAIN_TASK_PRI,      /* Sets the priority of the task */
             gMainTaskStack,      /* Provides the memory allocated for the task stack */
             &gMainTaskObj);     /* Provides the task control block for static task allocation */
-
+    
+    configASSERT(gMainTask != NULL);
+    vTaskStartScheduler();
     while (1)
     {
         //task stays here forever
