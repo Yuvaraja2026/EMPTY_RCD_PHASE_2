@@ -5,5 +5,4 @@
 
 void MinimalRadar_runStage(void);
 
-
 #endif
