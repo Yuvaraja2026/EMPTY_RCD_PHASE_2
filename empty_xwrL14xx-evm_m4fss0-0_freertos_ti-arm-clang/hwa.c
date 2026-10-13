@@ -5,14 +5,14 @@
 #include <drivers/edma.h>
 #include <drivers/soc.h>
 #include <control/mmwave/mmwave.h>
-#include <control/mmwave/include/mmwave_internal.h>
+#include "motion_detect.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
 
 
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
-//extern MmwDemo_MSS_MCB gMmwMssMCB;
+extern MmwDemo_MSS_MCB gMmwMssMCB;
 
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
 static HWA_Handle gHwaHandle = NULL;
@@ -21,8 +21,55 @@ static HWA_Handle gHwaHandle = NULL;
 static volatile int32_t gHwaStatus = SystemP_SUCCESS;
 
 /* Declare a volatile global variable to store TI mmWave SDK error codes, initialized to zero */
- int32_t gMmwaveErrCode;
-static MMWave_Handle gMmwaveHandle = NULL;
+static volatile int32_t gMmwaveErrCode = 0;
+
+float gSocClk = 40000000;//hz reference from mmw_cli.c
+/* Reference-backed fixed RF configuration.
+ * These field names and conversions come from mmw_cli.c in the supplied demo.
+ */
+static void MinimalRadar_loadRfDefaults(void)
+{
+    gMmwMssMCB.channelCfg.h_RxChCtrlBitMask = 7U;
+    gMmwMssMCB.channelCfg.h_TxChCtrlBitMask = 3U;
+    gMmwMssMCB.channelCfg.c_MiscCtrl = 0U;
+    gMmwMssMCB.numRxAntennas = 3U;
+    gMmwMssMCB.numTxAntennas = 2U;
+    gMmwMssMCB.rxAntOrder[0] = 0U;
+    gMmwMssMCB.rxAntOrder[1] = 1U;
+    gMmwMssMCB.rxAntOrder[2] = 2U;
+
+    gMmwMssMCB.profileComCfg.c_DigOutputSampRate = 20U;
+    gMmwMssMCB.profileComCfg.c_DigOutputBitsSel = 0U;
+    gMmwMssMCB.profileComCfg.c_DfeFirSel = 0U;
+    gMmwMssMCB.profileComCfg.h_NumOfAdcSamples = 128U;
+    gMmwMssMCB.profileComCfg.c_ChirpTxMimoPatSel = 4U;
+    gMmwMssMCB.profileComCfg.h_ChirpRampEndTime = 300U; /* CLI value 30.0 multiplied by 10. */
+    gMmwMssMCB.profileComCfg.c_ChirpRxHpfSel = 0U;
+    gMmwMssMCB.profileComCfg.c_MiscSettings = 0U;
+    gMmwMssMCB.profileComCfg.c_HpfFastInitDuration = 15U;
+    gMmwMssMCB.adcSamplingRate = 100.0f / 20.0f;
+    gMmwMssMCB.numRangeBins = 64U; /* real-only: pow2(128)/2 */
+    gMmwMssMCB.isBpmEnabled = 1U;
+
+    gMmwMssMCB.profileTimeCfg.h_ChirpIdleTime = 60U; /* 6.00 us * 10 */
+    gMmwMssMCB.profileTimeCfg.h_ChirpAdcStartTime = (28U << 10);
+    gMmwMssMCB.profileTimeCfg.xh_ChirpTxStartTime = 0U;
+    gMmwMssMCB.chirpSlope = 90.0f;
+    gMmwMssMCB.startFreq = 77.0f;
+    gMmwMssMCB.profileTimeCfg.xh_ChirpRfFreqSlope = (uint32_t)((90.0f * 1048576.0f) / (4.0f * 100.0f * 100.0f));
+    gMmwMssMCB.profileTimeCfg.w_ChirpRfFreqStart = (uint32_t)((77.0f * 1000.0f * 256.0f) / 400.0f);
+
+    gMmwMssMCB.frameCfg.h_NumOfChirpsInBurst = 8U;
+    gMmwMssMCB.frameCfg.c_NumOfChirpsAccum = 0U;
+    gMmwMssMCB.burstPeriod = 403.0f;
+    gMmwMssMCB.frameCfg.h_NumOfBurstsInFrame = 1U;
+    /* Frame-period tick conversion uses gSocClk exactly as the reference CLI parser does. */
+    gMmwMssMCB.frameCfg.w_FramePeriodicity = (uint32_t)((250.0f * gSocClk) / 1000.0f);
+    gMmwMssMCB.frameCfg.h_NumOfFrames = 0U;
+    gMmwMssMCB.frameCfg.w_BurstPeriodicity = (uint32_t)(10.0f * 403.0f);
+
+    memset(&gMmwMssMCB.sensorStart, 0, sizeof(gMmwMssMCB.sensorStart));
+}
 
 static void MinimalRadar_sendText(const char *text)
 {
@@ -59,15 +106,17 @@ void MinimalRadar_runStage(void)
     /* T009: initialize mmWave control only. */
 
         MMWave_InitCfg initCfg;                 /* Declare a configuration structure for the mmWave control module framework */
-       int32_t gMmwaveErrCode;
         memset((void*)&initCfg, 0, sizeof(initCfg));   /* Clear the structure memory to zero to avoid unpredictable behavior from random stack data */
         initCfg.iswarmstart = false;            /* Configure the driver to perform a clean, full cold boot instead of waking from a sleep state */
-        gMmwaveHandle = MMWave_init(&initCfg, &gMmwaveErrCode);  /* Execute the TI SDK initialization routine and store the system control handle and any error codes */
-        if (gMmwaveHandle == NULL)
+        gMmwMssMCB.ctrlHandle = MMWave_init(&initCfg, (int32_t *)&gMmwaveErrCode);  /* Execute the TI SDK initialization routine and store the system control handle and any error codes */
+        if (gMmwMssMCB.ctrlHandle == NULL)
         { 
             MinimalRadar_sendText("MMWave init FAILED\r\n");
             while (1) { } 
         }
     
     MinimalRadar_sendText("MMWave Init OK\r\n");
+      MinimalRadar_loadRfDefaults();
+    /* Stop here: inspect channelCfg and antenna counts in CCS. */
+    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
 }
