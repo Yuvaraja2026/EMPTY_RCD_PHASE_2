@@ -9,7 +9,7 @@
 
 #define MAIN_TASK_PRI (configMAX_PRIORITIES - 1U)                   /* Sets the main task priority to one less than the maximum allowed priority */
 
-#define MAIN_TASK_SIZE (8192U / sizeof(configSTACK_DEPTH_TYPE))     /* Calculates the main task stack size based on 8192 bytes of memory */
+#define MAIN_TASK_SIZE (16384U / sizeof(configSTACK_DEPTH_TYPE))     /* Calculates the main task stack size based on 8192 bytes of memory */
 
 StackType_t gMainTaskStack[MAIN_TASK_SIZE]__attribute__((aligned(32))); /* Allocates the main task stack with 32-byte memory alignment */
 StaticTask_t gMainTaskObj;  /* Declares a static task control block to store the main task's information */
