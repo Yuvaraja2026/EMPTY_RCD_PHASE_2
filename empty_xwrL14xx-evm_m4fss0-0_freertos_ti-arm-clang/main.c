@@ -2,6 +2,7 @@
 #include "ti_board_config.h"   
 #include "ti_drivers_open_close.h"
 #include "ti_board_open_close.h"
+#include "motion_detect.h"
 #include <kernel/dpl/DebugP.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -15,6 +16,7 @@ StackType_t gMainTaskStack[MAIN_TASK_SIZE]__attribute__((aligned(32))); /* Alloc
 StaticTask_t gMainTaskObj;  /* Declares a static task control block to store the main task's information */
 TaskHandle_t gMainTask;     /* Declares a task handle used to reference and manage the main task */
 
+MmwDemo_MSS_MCB gMmwMssMCB={0};
 static void MinimalApp_task(void *args)
 {
     Drivers_open();         /* Open and initialize the required drivers so that the software can communicate */
