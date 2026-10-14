@@ -16,6 +16,7 @@
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 
+extern void Mmwave_populateDefaultChirpControlCfg(MMWave_OpenCfg *ptrCtrlCfg);
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
 static HWA_Handle gHwaHandle = NULL;
 
@@ -134,4 +135,13 @@ void MinimalRadar_runStage(void)
         /* Factory-calibration implementation */
     if (mmwDemo_factoryCal() < 0) { while (1) { } }
     MinimalRadar_sendText("Factory calibration OK\r\n");
+        /* T018: open RF module only after mmwOpenCfg is populated from the reference control code. */
+    if (MMWave_open(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwOpenCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
+    MinimalRadar_sendText("MMWave open OK\r\n");
+    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+    /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
+    Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwOpenCfg);
+    /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
+    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+    
 }
