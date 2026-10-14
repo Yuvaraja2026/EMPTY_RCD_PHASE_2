@@ -6,6 +6,8 @@
 #include <drivers/soc.h>
 #include <control/mmwave/mmwave.h>
 #include "motion_detect.h"
+#include "mmw_flash_cal.h"
+#include "factory_cal.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
@@ -23,7 +25,7 @@ static volatile int32_t gHwaStatus = SystemP_SUCCESS;
 /* Declare a volatile global variable to store TI mmWave SDK error codes, initialized to zero */
 static volatile int32_t gMmwaveErrCode = 0;
 
-float gSocClk = 40000000;//hz reference from mmw_cli.c
+float gSocClk= 40000000;//hz reference from mmw_cli.c
 /* Reference-backed fixed RF configuration.
  * These field names and conversions come from mmw_cli.c in the supplied demo.
  */
@@ -119,4 +121,17 @@ void MinimalRadar_runStage(void)
       MinimalRadar_loadRfDefaults();
     /* Stop here: inspect channelCfg and antenna counts in CCS. */
     MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+        /* Reference requires valid RF synth trim before calibration. */
+    if (SOC_rcmReadSynthTrimValid() == RF_SYNTH_TRIM_VALID)
+    {
+        gMmwMssMCB.factoryCalCfg.atecalibinEfuse = true;
+    }
+    else { while (1) { } }
+    MinimalRadar_sendText("RF trim OK\r\n");
+        /*mmw_flash_cal_initializatin */
+    if (mmwDemo_flashInit() < 0) { while (1) { } }
+    MinimalRadar_sendText("Flash init OK\r\n");
+        /* Factory-calibration implementation */
+    if (mmwDemo_factoryCal() < 0) { while (1) { } }
+    MinimalRadar_sendText("Factory calibration OK\r\n");
 }
