@@ -138,10 +138,10 @@ void MinimalRadar_runStage(void)
         /* T018: open RF module only after mmwOpenCfg is populated from the reference control code. */
     if (MMWave_open(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwOpenCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
     MinimalRadar_sendText("MMWave open OK\r\n");
-    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+   // MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
     /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
     Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwOpenCfg);
     /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
-    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+    MinimalRadar_sendText("populated default chirp control cfg.\r\n");
     
 }
