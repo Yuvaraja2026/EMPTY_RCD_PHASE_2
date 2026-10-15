@@ -23,6 +23,8 @@
 
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 
+extern void Mmwave_populateDefaultCalibrationCfg (MMWave_CalibrationCfg* ptrCalibrationCfg);
+
 MmwDemo_calibData gFactoryCalibDataStorage __attribute__((aligned(8))) = {0};
 
 
@@ -42,6 +44,7 @@ void _MmwDemo_debugAssert(int32_t expression, const char *file, int32_t line)
 /**
  *  @b Description
  *  @n
+ *   we added the function from factory_cal.c 
  *      This function retrieves the calibration data from front end and saves it in flash.
  *
  *  @param[in]  ptrCalibrationData      Pointer to Calibration data
@@ -288,4 +291,61 @@ int32_t mmwDemo_factoryCal(void)
     gMmwMssMCB.fecTxclpcCalCmd.c_TxPwrCalTxEnaMask[1] = factoryCalCfg.fecRFFactoryCalCmd.c_TxPwrCalTxEnaMask[1];
 
     return retVal;
+}
+
+//The function reads the FRAME_REF_TIMER that runs free at 40MHz
+uint32_t Cycleprofiler_getTimeStamp(void)
+{
+    uint32_t *frameRefTimer;
+    frameRefTimer = (uint32_t *) 0x5B000020;
+    return *frameRefTimer;
+}
+
+/**
+ *  @b Description
+ *  @n
+ *      we added this function from default motion_detect.c
+ *      mmw demo helper Function to start sensor.
+ *
+ *  @retval
+ *      Success     - 0
+ *  @retval
+ *      Error       - <0
+ */
+int32_t MmwDemo_startSensor(void)
+{
+#if !(CONTINUOUS_WAVE_MODE_ENABLE) /* suppress warning */
+    int32_t     errCode;
+#endif
+    MMWave_CalibrationCfg   calibrationCfg;
+
+
+    /*****************************************************************************
+     * RF :: now start the RF and the real time ticking
+     *****************************************************************************/
+    /* Initialize the calibration configuration: */
+    memset ((void *)&calibrationCfg, 0, sizeof(MMWave_CalibrationCfg));
+    /* Populate the calibration configuration: */
+    Mmwave_populateDefaultCalibrationCfg (&calibrationCfg);
+
+    DebugP_logInfo("App: MMWave_start Issued\n");
+
+#if !(CONTINUOUS_WAVE_MODE_ENABLE) /* disable mmWave_start for continousMode CW */
+    /* Start the mmWave module: The configuration has been applied successfully. */
+    if (MMWave_start(gMmwMssMCB.ctrlHandle, &calibrationCfg, &gMmwMssMCB.sensorStart, &errCode) < 0)
+    {
+        MMWave_ErrorLevel   errorLevel;
+        int16_t             mmWaveErrorCode;
+        int16_t             subsysErrorCode;
+
+        /* Error/Warning: Unable to start the mmWave module */
+        MMWave_decodeError (errCode, &errorLevel, &mmWaveErrorCode, &subsysErrorCode);
+        DebugP_log ("Error: mmWave Start failed [mmWave Error: %d Subsys: %d]\n", mmWaveErrorCode, subsysErrorCode);
+        /* datapath has already been moved to start state; so either we initiate a cleanup of start sequence or
+           assert here and re-start from the beginning. For now, choosing the latter path */
+        MmwDemo_debugAssert(0);
+        return -1;
+    }
+#endif
+    return 0;
 }
