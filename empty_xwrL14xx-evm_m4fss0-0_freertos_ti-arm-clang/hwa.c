@@ -8,6 +8,8 @@
 #include "motion_detect.h"
 #include "mmw_flash_cal.h"
 #include "factory_cal.h"
+#include "mmwave_control/interrupts.h"
+
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
@@ -16,7 +18,7 @@
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 
-extern void Mmwave_populateDefaultChirpControlCfg(MMWave_OpenCfg *ptrCtrlCfg);
+extern void Mmwave_populateDefaultChirpControlCfg(MMWave_CtrlCfg *ptrCtrlCfg);
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
 static HWA_Handle gHwaHandle = NULL;
 
@@ -25,6 +27,8 @@ static volatile int32_t gHwaStatus = SystemP_SUCCESS;
 
 /* Declare a volatile global variable to store TI mmWave SDK error codes, initialized to zero */
 static volatile int32_t gMmwaveErrCode = 0;
+
+//static volatile uint32_t gFrameCounter = 0U;
 
 float gSocClk= 40000000;//hz reference from mmw_cli.c
 /* Reference-backed fixed RF configuration.
@@ -140,8 +144,17 @@ void MinimalRadar_runStage(void)
     MinimalRadar_sendText("MMWave open OK\r\n");
    // MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
     /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
-    Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwOpenCfg);
+    Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwCtrlCfg);
     /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
     MinimalRadar_sendText("populated default chirp control cfg.\r\n");
+    if (MMWave_config(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwCtrlCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
+    MinimalRadar_sendText("RF configuration accepted\r\n");
+        /* Register the reference frame-start interrupt;*/
+    if (mmwDemo_registerFrameStartInterrupt() != 0) { while (1) { } }
+    /* Stop before sensor start. */
+    MinimalRadar_sendText("Frame start interrupt registered.\r\n");
+
+    if (MmwDemo_startSensor() < 0) { while (1) { } }
+    MinimalRadar_sendText("Sensor Started\r\n");
     
 }
