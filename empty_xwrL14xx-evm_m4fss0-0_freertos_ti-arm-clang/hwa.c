@@ -9,6 +9,8 @@
 #include "mmw_flash_cal.h"
 #include "factory_cal.h"
 #include "mmwave_control/interrupts.h"
+#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
+#include "dpc/dpc.h"
 
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
@@ -19,8 +21,10 @@
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 
 extern void Mmwave_populateDefaultChirpControlCfg(MMWave_CtrlCfg *ptrCtrlCfg);
+extern void rangeProc_dpuInit();
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
-static HWA_Handle gHwaHandle = NULL;
+//static HWA_Handle gHwaHandle = NULL;
+ HWA_Handle hwaHandle;
 
 /* Declare a volatile global status variable for HWA operations, initialized to a success code */
 static volatile int32_t gHwaStatus = SystemP_SUCCESS;
@@ -103,8 +107,8 @@ void MinimalRadar_runStage(void)
     
     /* T007: open only HWA instance 0, matching the supplied DPC_Init(). */
     gHwaStatus = SystemP_SUCCESS;
-    gHwaHandle = HWA_open(0, NULL, (int32_t *)&gHwaStatus); //Open instance 0 of the Hardware Accelerator (HWA) peripheral using default configurations, and store the resulting driver handle and status code 
-    if (gHwaHandle == NULL) 
+    hwaHandle = HWA_open(0, NULL, (int32_t *)&gHwaStatus); //Open instance 0 of the Hardware Accelerator (HWA) peripheral using default configurations, and store the resulting driver handle and status code 
+    if (hwaHandle == NULL) 
     {
          while (1) { }
     }
@@ -156,5 +160,8 @@ void MinimalRadar_runStage(void)
 
     if (MmwDemo_startSensor() < 0) { while (1) { } }
     MinimalRadar_sendText("Sensor Started\r\n");
-    
+
+    /* DPU init/config implementations are preserved in ti_reference_extract.c. */
+    rangeProc_dpuInit();
+    MinimalRadar_sendText("Range DPU_init ok\r\n");
 }
