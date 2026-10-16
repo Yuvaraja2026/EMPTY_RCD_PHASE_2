@@ -15,6 +15,7 @@
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
+#include "radar_memory.h"
 
 
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
@@ -38,6 +39,40 @@ float gSocClk= 40000000;//hz reference from mmw_cli.c
 /* Reference-backed fixed RF configuration.
  * These field names and conversions come from mmw_cli.c in the supplied demo.
  */
+
+    /**
+ *  @b Description
+ *  @n
+ *      The function resets HWA DMA source channel pool
+ *
+ *  @param[in]  pool Handle to pool object.
+ *
+ *  @retval
+ *      none
+ */
+void DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(HwaDmaTrigChanPoolObj *pool)
+{
+    pool->dmaTrigSrcNextChan = 0;
+}
+
+/**
+ *  @b Description
+ *  @n
+ *      Utility function for reseting memory pool.
+ *
+ *  @param[in]  pool Handle to pool object.
+ *
+ *  \ingroup DPC_OBJDET__INTERNAL_FUNCTION
+ *
+ *  @retval
+ *      none.
+ */
+void DPC_ObjDet_MemPoolReset(MemPoolObj *pool)
+{
+    pool->currAddr = (uintptr_t)pool->cfg.addr;
+    pool->maxCurrAddr = pool->currAddr;
+}
+
 static void MinimalRadar_loadRfDefaults(void)
 {
     gMmwMssMCB.channelCfg.h_RxChCtrlBitMask = 7U;
@@ -164,4 +199,32 @@ void MinimalRadar_runStage(void)
     /* DPU init/config implementations are preserved in ti_reference_extract.c. */
     rangeProc_dpuInit();
     MinimalRadar_sendText("Range DPU_init ok\r\n");
+    /* RangeProc_configParser is reference-backed; preserve its exact negative return value during debug. */
+    /* Initialize the backing memory pools. */
+    gMmwMssMCB.L3RamObj.cfg.addr =
+        (void *)&gMmwL3[0];
+
+    gMmwMssMCB.L3RamObj.cfg.size =
+        sizeof(gMmwL3);
+
+    gMmwMssMCB.CoreLocalRamObj.cfg.addr =
+        (void *)&gMmwCoreLocMem[0];
+
+    gMmwMssMCB.CoreLocalRamObj.cfg.size =
+        sizeof(gMmwCoreLocMem);
+
+
+    /* Initialize current allocation pointers. */
+    DPC_ObjDet_MemPoolReset(
+        &gMmwMssMCB.L3RamObj);
+
+    DPC_ObjDet_MemPoolReset(
+        &gMmwMssMCB.CoreLocalRamObj);
+
+
+    /* RangeProc parser also allocates HWA DMA trigger channels. */
+    DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(
+        &gMmwMssMCB.HwaDmaChanPoolObj);
+    if (RangeProc_configParser() < 0) { while (1) { } }
+    MinimalRadar_sendText("RangeProc_configParser ok\r\n");
 }

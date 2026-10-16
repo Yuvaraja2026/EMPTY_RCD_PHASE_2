@@ -157,6 +157,59 @@ void rangeProc_dpuInit()
 }
 
 
+/**
+ *  @b Description
+ *  @n
+ *      Utility function for allocating from a static memory pool.
+ *
+ *  @param[in]  pool Handle to pool object.
+ *  @param[in]  size Size in bytes to be allocated.
+ *  @param[in]  align Alignment in bytes
+ *
+ *  \ingroup DPC_OBJDET__INTERNAL_FUNCTION
+ *
+ *  @retval
+ *      pointer to beginning of allocated block. NULL indicates could not
+ *      allocate.
+ */
+void *DPC_ObjDet_MemPoolAlloc(MemPoolObj *pool,
+                              uint32_t size,
+                              uint8_t align)
+{
+    void *retAddr = NULL;
+    uintptr_t addr;
+
+    addr = MEM_ALIGN(pool->currAddr, align);
+    if ((addr + size) <= ((uintptr_t)pool->cfg.addr + pool->cfg.size))
+    {
+        retAddr = (void *)addr;
+        pool->currAddr = addr + size;
+        pool->maxCurrAddr = MAX(pool->currAddr, pool->maxCurrAddr);
+    }
+
+    return(retAddr);
+}
+
+/**
+ *  @b Description
+ *  @n
+ *      The function allocates HWA DMA source channel from the pool
+ *
+ *  @param[in]  pool Handle to pool object.
+ *
+ *  @retval
+ *      channel Allocated HWA trigger source channel
+ */
+uint8_t DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(HwaDmaTrigChanPoolObj *pool)
+{
+    uint8_t channel = 0xFF;
+    if(pool->dmaTrigSrcNextChan < HWA_MAX_NUM_DMA_TRIG_CHANNELS)
+    {
+        channel = pool->dmaTrigSrcNextChan;
+        pool->dmaTrigSrcNextChan++;
+    }
+    return channel;
+}
 
 
 /**
@@ -164,6 +217,7 @@ void rangeProc_dpuInit()
 *  @n
 *    Based on the configuration, set up the range processing DPU configurations
 */
+/* ===== REFERENCE FUNCTION: RangeProc_configParser ===== */
 int32_t RangeProc_configParser()
 {
 
@@ -201,7 +255,7 @@ int32_t RangeProc_configParser()
     pHwConfig->hwaCfg.numParamSet = DPU_RANGEPROCHWA_NUM_HWA_PARAM_SETS;
     pHwConfig->hwaCfg.hwaWinRamOffset  = DPC_OBJDET_HWA_WINDOW_RAM_OFFSET;
     pHwConfig->hwaCfg.hwaWinSym = 1;
-    pHwConfig->hwaCfg.dataInputMode = DPU_RangeProcHWA_InputMode_ISOLATED;
+pHwConfig->hwaCfg.dataInputMode = DPU_RangeProcHWA_InputMode_ISOLATED;
     pHwConfig->hwaCfg.dmaTrigSrcChan[0] = DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(&gMmwMssMCB.HwaDmaChanPoolObj);
     pHwConfig->hwaCfg.dmaTrigSrcChan[1] = DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(&gMmwMssMCB.HwaDmaChanPoolObj);
 
@@ -388,3 +442,4 @@ int32_t RangeProc_configParser()
 exit:
     return retVal;
 }
+
