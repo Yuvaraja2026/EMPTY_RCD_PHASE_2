@@ -17,10 +17,14 @@ const flash      = scripting.addModule("/board/flash/flash", {}, false);
 const flash1     = flash.addInstance();
 const mpd_demo   = scripting.addModule("/demo/mpd_demo/mpd_demo", {}, false);
 const mpd_demo1  = mpd_demo.addInstance();
+const edma       = scripting.addModule("/drivers/edma/edma", {}, false);
+const edma1      = edma.addInstance();
 const gpio       = scripting.addModule("/drivers/gpio/gpio", {}, false);
 const gpio1      = gpio.addInstance();
 const hwa        = scripting.addModule("/drivers/hwa/hwa", {}, false);
 const hwa1       = hwa.addInstance();
+const power      = scripting.addModule("/drivers/power/power", {}, false);
+const power1     = power.addInstance();
 const debug_log  = scripting.addModule("/kernel/dpl/debug_log");
 const mpu_armv7  = scripting.addModule("/kernel/dpl/mpu_armv7", {}, false);
 const mpu_armv71 = mpu_armv7.addInstance();
@@ -36,25 +40,35 @@ flash1.peripheralDriver.$name = "CONFIG_QSPI0";
 
 mpd_demo1.$name = "CONFIG_MPD_DEMO0";
 
+edma1.$name                        = "CONFIG_EDMA1";
+edma1.instance                     = "EDMA_APPSS_B";
+edma1.edmaRmDmaCh[0].$name         = "CONFIG_EDMA_RM5";
+edma1.edmaRmQdmaCh[0].$name        = "CONFIG_EDMA_RM6";
+edma1.edmaRmTcc[0].$name           = "CONFIG_EDMA_RM7";
+edma1.edmaRmParam[0].$name         = "CONFIG_EDMA_RM8";
+edma1.edmaRmReservedDmaCh[0].$name = "CONFIG_EDMA_RM9";
+
 gpio1.$name = "CONFIG_GPIO0";
 
 hwa1.$name = "CONFIG_HWA0";
+
+power1.$name          = "CONFIG_POWER0";
+power1.parkPins.$name = "drivers_power_v0_power_v0_pins0";
 
 debug_log.enableUartLog           = true;
 debug_log.uartLog.$name           = "CONFIG_UART0";
 debug_log.uartLog.UART.RX.$assign = "PAD_AP";
 debug_log.uartLog.UART.TX.$assign = "PAD_AO";
 
-const edma                         = scripting.addModule("/drivers/edma/edma", {}, false);
-const edma1                        = edma.addInstance({}, false);
-edma1.$name                        = "CONFIG_EDMA0";
-debug_log.uartLog.edmaConfig       = edma1;
-flash1.peripheralDriver.edmaConfig = edma1;
-edma1.edmaRmDmaCh[0].$name         = "CONFIG_EDMA_RM0";
-edma1.edmaRmQdmaCh[0].$name        = "CONFIG_EDMA_RM1";
-edma1.edmaRmTcc[0].$name           = "CONFIG_EDMA_RM2";
-edma1.edmaRmParam[0].$name         = "CONFIG_EDMA_RM3";
-edma1.edmaRmReservedDmaCh[0].$name = "CONFIG_EDMA_RM4";
+const edma2                        = edma.addInstance({}, false);
+edma2.$name                        = "CONFIG_EDMA0";
+debug_log.uartLog.edmaConfig       = edma2;
+flash1.peripheralDriver.edmaConfig = edma2;
+edma2.edmaRmDmaCh[0].$name         = "CONFIG_EDMA_RM0";
+edma2.edmaRmQdmaCh[0].$name        = "CONFIG_EDMA_RM1";
+edma2.edmaRmTcc[0].$name           = "CONFIG_EDMA_RM2";
+edma2.edmaRmParam[0].$name         = "CONFIG_EDMA_RM3";
+edma2.edmaRmReservedDmaCh[0].$name = "CONFIG_EDMA_RM4";
 
 mpu_armv71.$name        = "CONFIG_MPU_REGION0";
 mpu_armv71.attributes   = "Device";

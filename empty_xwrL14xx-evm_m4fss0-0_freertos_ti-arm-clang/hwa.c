@@ -9,17 +9,18 @@
 #include "mmw_flash_cal.h"
 #include "factory_cal.h"
 #include "mmwave_control/interrupts.h"
-#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
+//#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
 #include "dpc/dpc.h"
 
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
+#include "radar_memory.h"
 
 
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
-
+DPU_RangeProcHWA_Config rangeProcDpuCfg;
 extern void Mmwave_populateDefaultChirpControlCfg(MMWave_CtrlCfg *ptrCtrlCfg);
 extern void rangeProc_dpuInit();
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
@@ -32,12 +33,46 @@ static volatile int32_t gHwaStatus = SystemP_SUCCESS;
 /* Declare a volatile global variable to store TI mmWave SDK error codes, initialized to zero */
 static volatile int32_t gMmwaveErrCode = 0;
 
-//static volatile uint32_t gFrameCounter = 0U;
+static volatile uint32_t gFrameCounter = 0U;
 
 float gSocClk= 40000000;//hz reference from mmw_cli.c
 /* Reference-backed fixed RF configuration.
  * These field names and conversions come from mmw_cli.c in the supplied demo.
  */
+
+    /**
+ *  @b Description
+ *  @n
+ *      The function resets HWA DMA source channel pool
+ *
+ *  @param[in]  pool Handle to pool object.
+ *
+ *  @retval
+ *      none
+ */
+void DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(HwaDmaTrigChanPoolObj *pool)
+{
+    pool->dmaTrigSrcNextChan = 0;
+}
+
+/**
+ *  @b Description
+ *  @n
+ *      Utility function for reseting memory pool.
+ *
+ *  @param[in]  pool Handle to pool object.
+ *
+ *  \ingroup DPC_OBJDET__INTERNAL_FUNCTION
+ *
+ *  @retval
+ *      none.
+ */
+void DPC_ObjDet_MemPoolReset(MemPoolObj *pool)
+{
+    pool->currAddr = (uintptr_t)pool->cfg.addr;
+    pool->maxCurrAddr = pool->currAddr;
+}
+
 static void MinimalRadar_loadRfDefaults(void)
 {
     gMmwMssMCB.channelCfg.h_RxChCtrlBitMask = 7U;
@@ -98,13 +133,11 @@ void MinimalRadar_runStage(void)
     {
          while (1) { } 
     }
-
         /* Trigger hardware-based hardware memory initialization (zero-initialisation/BIST) for critical system 
         memory banks (HWA Shared RAM, TPCC A & B buffers, FECSS Shared RAM, and APPSS Shared RAM blocks 0 & 1) 
         to clear residual data and prevent memory corruption before peripheral startup */
     SOC_memoryInit(SOC_RCM_MEMINIT_HWA_SHRAM_INIT | SOC_RCM_MEMINIT_TPCCA_INIT | SOC_RCM_MEMINIT_TPCCB_INIT | SOC_RCM_MEMINIT_FECSS_SHRAM_INIT | SOC_RCM_MEMINIT_APPSS_SHRAM0_INIT | SOC_RCM_MEMINIT_APPSS_SHRAM1_INIT);
     MinimalRadar_sendText("Radar memories initialized\r\n");
-    
     /* T007: open only HWA instance 0, matching the supplied DPC_Init(). */
     gHwaStatus = SystemP_SUCCESS;
     hwaHandle = HWA_open(0, NULL, (int32_t *)&gHwaStatus); //Open instance 0 of the Hardware Accelerator (HWA) peripheral using default configurations, and store the resulting driver handle and status code 
@@ -158,10 +191,73 @@ void MinimalRadar_runStage(void)
     /* Stop before sensor start. */
     MinimalRadar_sendText("Frame start interrupt registered.\r\n");
 
-    if (MmwDemo_startSensor() < 0) { while (1) { } }
-    MinimalRadar_sendText("Sensor Started\r\n");
-
     /* DPU init/config implementations are preserved in ti_reference_extract.c. */
     rangeProc_dpuInit();
+    if (gMmwMssMCB.rangeProcDpuHandle == NULL)
+    {
+        while (1) {}
+    }
     MinimalRadar_sendText("Range DPU_init ok\r\n");
+
+
+    /* RangeProc_configParser is reference-backed; preserve its exact negative return value during debug. */
+    /* Initialize the backing memory pools. */
+    gMmwMssMCB.L3RamObj.cfg.addr =
+        (void *)&gMmwL3[0];
+
+    gMmwMssMCB.L3RamObj.cfg.size =
+        sizeof(gMmwL3);
+
+    gMmwMssMCB.CoreLocalRamObj.cfg.addr =
+        (void *)&gMmwCoreLocMem[0];
+
+    gMmwMssMCB.CoreLocalRamObj.cfg.size =
+        sizeof(gMmwCoreLocMem);
+
+
+    /* Initialize current allocation pointers. */
+    DPC_ObjDet_MemPoolReset(
+        &gMmwMssMCB.L3RamObj);
+
+    DPC_ObjDet_MemPoolReset(
+        &gMmwMssMCB.CoreLocalRamObj);
+
+
+    /* RangeProc parser also allocates HWA DMA trigger channels. */
+    DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(
+        &gMmwMssMCB.HwaDmaChanPoolObj);
+
+    if (RangeProc_configParser() < 0) { while (1) { } }
+    MinimalRadar_sendText("RangeProc_configParser ok\r\n");
+    if (DPU_RangeProcHWA_config(gMmwMssMCB.rangeProcDpuHandle, &rangeProcDpuCfg) < 0) { while (1) { } }
+    MinimalRadar_sendText("DPU_RangeProcHWA_config ok\r\n");
+     
+    if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
+     MinimalRadar_sendText("DPU_RangeProcHWA_control ok\r\n");
+    if (MmwDemo_startSensor() < 0)
+    {
+        while (1) {}
+    }
+    MinimalRadar_sendText("Sensor Started\r\n");
+    
+        DPU_RangeProcHWA_OutParams rangeOut;
+        memset((void*)&rangeOut, 0, sizeof(rangeOut));
+        MinimalRadar_sendText("Before process\r\n");
+
+    while(1)
+    {
+       int32_t retVal = DPU_RangeProcHWA_process(gMmwMssMCB.rangeProcDpuHandle,&rangeOut);
+
+       // MinimalRadar_sendText("After process A\r\n");
+
+        if (retVal < 0)
+        {
+            while (1)
+            {
+            }
+        }
+        gFrameCounter++;
+
+        if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
+    }
 }

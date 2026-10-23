@@ -84,6 +84,7 @@
                                     <listOptionValue value="${CG_TOOL_ROOT}/lib"/>
                                     <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/board/lib"/>
                                     <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/utils/lib"/>
+                                    <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/datapath/lib"/>
                                 </option>
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.LIBRARY.1507936200" superClass="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.LIBRARY" valueType="libs">
                                     <listOptionValue value="${SYSCONFIG_TOOL_LIBRARIES}"/>
@@ -97,6 +98,7 @@
                                     <listOptionValue value="fecss_patch_m4.lib"/>
                                     <listOptionValue value="board.xwrL14xx.m4f.ti-arm-clang.debug.lib"/>
                                     <listOptionValue value="utils.xwrL14xx.m4f.ti-arm-clang.debug.lib"/>
+                                    <listOptionValue value="datapath_tracker3d.xwrL14xx.m4f.ti-arm-clang.debug.lib"/>
                                 </option>
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL.1615893494" superClass="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL" value="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL.RAM_MODEL" valueType="enumerated"/>
                             </tool>
@@ -114,7 +116,7 @@
                         </toolChain>
                     </folderInfo>
                     <sourceEntries>
-                        <entry excluding="dpc.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                     </sourceEntries>
                 </configuration>
             </storageModule>
@@ -206,6 +208,8 @@
                                     <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/board/lib"/>
                                     <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/control/lib"/>
                                     <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/utils/lib"/>
+                                    <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/alg/gtrack/lib"/>
+                                    <listOptionValue value="${MCU_PLUS_SDK_PATH}/source/datapath/lib"/>
                                 </option>
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.LIBRARY.501759956" superClass="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.LIBRARY" valueType="libs">
                                     <listOptionValue value="${SYSCONFIG_TOOL_LIBRARIES}"/>
@@ -218,6 +222,7 @@
                                     <listOptionValue value="board.xwrL14xx.m4f.ti-arm-clang.release.lib"/>
                                     <listOptionValue value="control.xwrL14xx.m4f.ti-arm-clang.release.lib"/>
                                     <listOptionValue value="utils.xwrL14xx.m4f.ti-arm-clang.release.lib"/>
+                                    <listOptionValue value="datapath_tracker3d.xwrL14xx.m4f.ti-arm-clang.release.lib"/>
                                 </option>
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL.1660739427" superClass="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL" value="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_5.1.linkerID.INITIALIZATION_MODEL.RAM_MODEL" valueType="enumerated"/>
                             </tool>
@@ -235,7 +240,7 @@
                         </toolChain>
                     </folderInfo>
                     <sourceEntries>
-                        <entry excluding="dpc.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                     </sourceEntries>
                 </configuration>
             </storageModule>
