@@ -38,7 +38,7 @@
 Edma_IntrObject     intrObj_rangeProc[2];
 extern MmwDemo_MSS_MCB gMmwMssMCB; 
 
-static uint8_t gRangeProcHeapMem[RANGEPROCHWA_HEAP_MEM_SIZE] __attribute__((aligned(HeapP_BYTE_ALIGNMENT)));
+//static uint8_t gRangeProcHeapMem[RANGEPROCHWA_HEAP_MEM_SIZE] __attribute__((aligned(HeapP_BYTE_ALIGNMENT)));
 HWA_Handle hwaHandle;
 DPU_RangeProcHWA_Config rangeProcDpuCfg;
 
@@ -59,80 +59,80 @@ DPU_RangeProcHWA_Config rangeProcDpuCfg;
  *  @retval
  *      Error       - NULL
  */
-DPU_RangeProcHWA_Handle DPU_RangeProcHWA_init
-(
-    DPU_RangeProcHWA_InitParams     *initParams,
-    int32_t*                        errCode
-)
-{
-    rangeProcHWAObj     *rangeProcObj = NULL;
-    // SemaphoreP_Params   semParams;
-    HWA_MemInfo         hwaMemInfo;
-    uint8_t             index;
-    int32_t             status = SystemP_SUCCESS;
+// DPU_RangeProcHWA_Handle DPU_RangeProcHWA_init
+// (
+//     DPU_RangeProcHWA_InitParams     *initParams,
+//     int32_t*                        errCode
+// )
+// {
+//     rangeProcHWAObj     *rangeProcObj = NULL;
+//     // SemaphoreP_Params   semParams;
+//     HWA_MemInfo         hwaMemInfo;
+//     uint8_t             index;
+//     int32_t             status = SystemP_SUCCESS;
 
-    *errCode = 0;
+//     *errCode = 0;
 
-    if( (initParams == NULL) ||
-       (initParams->hwaHandle == NULL) )
-    {
-        *errCode = DPU_RANGEPROCHWA_EINVAL;
-        goto exit;
-    }
+//     if( (initParams == NULL) ||
+//        (initParams->hwaHandle == NULL) )
+//     {
+//         *errCode = DPU_RANGEPROCHWA_EINVAL;
+//         goto exit;
+//     }
 
-    /* Allocate Memory for rangeProc */
-    rangeProcObj = (rangeProcHWAObj*)&gRangeProcHeapMem;
-    if(rangeProcObj == NULL)
-    {
-        *errCode = DPU_RANGEPROCHWA_ENOMEM;
-        goto exit;
-    }
+//     /* Allocate Memory for rangeProc */
+//     rangeProcObj = (rangeProcHWAObj*)&gRangeProcHeapMem;
+//     if(rangeProcObj == NULL)
+//     {
+//         *errCode = DPU_RANGEPROCHWA_ENOMEM;
+//         goto exit;
+//     }
 
-    /* Initialize memory */
-    memset((void *)rangeProcObj, 0, sizeof(rangeProcHWAObj));
+//     /* Initialize memory */
+//     memset((void *)rangeProcObj, 0, sizeof(rangeProcHWAObj));
 
-    memcpy((void *)&rangeProcObj->initParms, initParams, sizeof(DPU_RangeProcHWA_InitParams));
+//     memcpy((void *)&rangeProcObj->initParms, initParams, sizeof(DPU_RangeProcHWA_InitParams));
 
-    /* Set HWA bank memory address */
-    *errCode =  HWA_getHWAMemInfo(initParams->hwaHandle, &hwaMemInfo);
-    if (*errCode < 0)
-    {
-        goto exit;
-    }
+//     /* Set HWA bank memory address */
+//     *errCode =  HWA_getHWAMemInfo(initParams->hwaHandle, &hwaMemInfo);
+//     if (*errCode < 0)
+//     {
+//         goto exit;
+//     }
 
-    for (index = 0; index < hwaMemInfo.numBanks; index++)
-    {
-        rangeProcObj->hwaMemBankAddr[index] = hwaMemInfo.baseAddress + index * hwaMemInfo.bankSize;
-    }
+//     for (index = 0; index < hwaMemInfo.numBanks; index++)
+//     {
+//         rangeProcObj->hwaMemBankAddr[index] = hwaMemInfo.baseAddress + index * hwaMemInfo.bankSize;
+//     }
 
-    /* Create semaphore for EDMA done */
-    status = SemaphoreP_constructBinary(&rangeProcObj->edmaDoneSemaHandle, 0);
-    if(status != SystemP_SUCCESS)
-    {
-        *errCode = DPU_RANGEPROCHWA_ESEMA;
-        goto exit;
-    }
+//     /* Create semaphore for EDMA done */
+//     status = SemaphoreP_constructBinary(&rangeProcObj->edmaDoneSemaHandle, 0);
+//     if(status != SystemP_SUCCESS)
+//     {
+//         *errCode = DPU_RANGEPROCHWA_ESEMA;
+//         goto exit;
+//     }
 
-    /* Create semaphore for HWA done */
-    status = SemaphoreP_constructBinary(&rangeProcObj->hwaDoneSemaHandle, 0);
-    if(status != SystemP_SUCCESS)
-    {
-        *errCode = DPU_RANGEPROCHWA_ESEMA;
-        goto exit;
-    }
+//     /* Create semaphore for HWA done */
+//     status = SemaphoreP_constructBinary(&rangeProcObj->hwaDoneSemaHandle, 0);
+//     if(status != SystemP_SUCCESS)
+//     {
+//         *errCode = DPU_RANGEPROCHWA_ESEMA;
+//         goto exit;
+//     }
 
-exit:
-    if(*errCode < 0)
-    {
-        rangeProcObj = (DPU_RangeProcHWA_Handle)NULL;
-    }
-    else
-    {
-        /* Fall through */
-    }
-    return ((DPU_RangeProcHWA_Handle)rangeProcObj);
+// exit:
+//     if(*errCode < 0)
+//     {
+//         rangeProcObj = (DPU_RangeProcHWA_Handle)NULL;
+//     }
+//     else
+//     {
+//         /* Fall through */
+//     }
+//     return ((DPU_RangeProcHWA_Handle)rangeProcObj);
 
-}
+// }
 
 
 /**
