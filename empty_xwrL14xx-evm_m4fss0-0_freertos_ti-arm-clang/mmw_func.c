@@ -349,3 +349,68 @@ int32_t MmwDemo_startSensor(void)
 #endif
     return 0;
 }
+
+/**
+*  @b Description
+*  @n
+*    Select coordinates of active virtual antennas and calculate the size of the 2D virtual antenna pattern,
+*    i.e. number of antenna rows and number of antenna columns.
+*/
+void MmwDemo_calcActiveAntennaGeometry()
+{
+    int32_t txInd, rxInd, ind;
+    int32_t rowMax, colMax;
+    int32_t rowMin, colMin;
+    /* Select only active antennas */
+    ind = 0;
+    for (txInd = 0; txInd < gMmwMssMCB.numTxAntennas; txInd++)
+    {
+        for (rxInd = 0; rxInd < gMmwMssMCB.numRxAntennas; rxInd++)
+        {
+            gMmwMssMCB.activeAntennaGeometryCfg.ant[ind] = gMmwMssMCB.antennaGeometryCfg.ant[gMmwMssMCB.rxAntOrder[rxInd] + (txInd * SYS_COMMON_NUM_RX_CHANNEL)];
+            ind++;
+        }
+    }
+
+    /* Calculate virtual antenna 2D array size */
+    ind = 0;
+    rowMax = 0;
+    colMax = 0;
+    rowMin = 127;
+    colMin = 127;
+    for (txInd = 0; txInd < gMmwMssMCB.numTxAntennas; txInd++)
+    {
+        for (rxInd = 0; rxInd < gMmwMssMCB.numRxAntennas; rxInd++)
+        {
+            if (gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].row > rowMax)
+            {
+                rowMax = gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].row;
+            }
+            if (gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].col > colMax)
+            {
+                colMax = gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].col;
+            }
+            if (gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].row < rowMin)
+            {
+                rowMin = gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].row;
+            }
+            if (gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].col < colMin)
+            {
+                colMin = gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].col;
+            }
+            ind++;
+        }
+    }
+    ind = 0;
+    for (txInd = 0; txInd < gMmwMssMCB.numTxAntennas; txInd++)
+    {
+        for (rxInd = 0; rxInd < gMmwMssMCB.numRxAntennas; rxInd++)
+        {
+            gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].row -= rowMin;
+            gMmwMssMCB.activeAntennaGeometryCfg.ant[ind].col -= colMin;
+            ind++;
+        }
+    }
+    gMmwMssMCB.numAntRow = rowMax - rowMin + 1;
+    gMmwMssMCB.numAntCol = colMax - colMin + 1;
+}

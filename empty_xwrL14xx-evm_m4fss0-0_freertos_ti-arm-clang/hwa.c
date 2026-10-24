@@ -10,6 +10,7 @@
 #include "factory_cal.h"
 #include "mmwave_control/interrupts.h"
 //#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
+#include <datapath/dpu/doaproc/v0/doaproc.h>
 #include "dpc/dpc.h"
 
 #include "ti_drivers_config.h"
@@ -21,8 +22,13 @@
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 DPU_RangeProcHWA_Config rangeProcDpuCfg;
+DPU_DoaProc_Config doaProcDpuCfg;
 extern void Mmwave_populateDefaultChirpControlCfg(MMWave_CtrlCfg *ptrCtrlCfg);
 extern void rangeProc_dpuInit();
+extern void doaProc_dpuInit();
+extern void MmwDemo_calcActiveAntennaGeometry();
+extern int32_t DoaProc_configParser();
+extern int32_t MmwDemo_cfgDopplerParamMapping(DPU_DoaProc_HWA_Option_Cfg *dopplerParamCfg, uint32_t mappingOption);
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
 //static HWA_Handle gHwaHandle = NULL;
  HWA_Handle hwaHandle;
@@ -73,8 +79,22 @@ void DPC_ObjDet_MemPoolReset(MemPoolObj *pool)
     pool->maxCurrAddr = pool->currAddr;
 }
 
+	static const MmwDemo_antennaGeometryCfg gMinimalAntGeometry =
+{
+    .ant =
+    {
+        {0, 0},
+        {1, 1},
+        {0, 2},
+        {0, 1},
+        {1, 2},
+        {0, 3}
+    }
+};
+
 static void MinimalRadar_loadRfDefaults(void)
 {
+    memcpy(&gMmwMssMCB.antennaGeometryCfg,&gMinimalAntGeometry,sizeof(MmwDemo_antennaGeometryCfg));
     gMmwMssMCB.channelCfg.h_RxChCtrlBitMask = 7U;
     gMmwMssMCB.channelCfg.h_TxChCtrlBitMask = 3U;
     gMmwMssMCB.channelCfg.c_MiscCtrl = 0U;
@@ -198,7 +218,14 @@ void MinimalRadar_runStage(void)
         while (1) {}
     }
     MinimalRadar_sendText("Range DPU_init ok\r\n");
-
+    doaProc_dpuInit();
+        if (gMmwMssMCB.doaProcDpuHandle == NULL)
+    {
+        while (1) {}
+    }
+    
+    /* Stop: verify gMmwMssMCB.doaProcDpuHandle != NULL. */
+    MinimalRadar_sendText("doaProc_dpuInit ok\r\n");
 
     /* RangeProc_configParser is reference-backed; preserve its exact negative return value during debug. */
     /* Initialize the backing memory pools. */
@@ -233,11 +260,20 @@ void MinimalRadar_runStage(void)
     MinimalRadar_sendText("DPU_RangeProcHWA_config ok\r\n");
      
     if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
-     MinimalRadar_sendText("DPU_RangeProcHWA_control ok\r\n");
+    MinimalRadar_sendText("DPU_RangeProcHWA_control ok\r\n");
+
+    MmwDemo_calcActiveAntennaGeometry();
+    MinimalRadar_sendText("ActiveAntennaGeometry ok\r\n");
+
+    /* The mapping helper is copied exactly from dpc.c; inspect every srcBcnt before DoA config. */
+    if (MmwDemo_cfgDopplerParamMapping(&doaProcDpuCfg.hwRes.hwaCfg.doaRngGateCfg, DOPPLER_OUTPUT_MAPPING_DOP_ROW_COL) < 0) { while (1) { } }
+    MinimalRadar_sendText("MmwDemo_cfgDopplerParamMapping ok\r\n");
+    
     if (MmwDemo_startSensor() < 0)
     {
         while (1) {}
     }
+
     MinimalRadar_sendText("Sensor Started\r\n");
     
         DPU_RangeProcHWA_OutParams rangeOut;
