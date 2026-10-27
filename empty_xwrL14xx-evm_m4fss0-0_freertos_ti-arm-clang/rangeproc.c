@@ -64,62 +64,6 @@ void rangeProc_dpuInit()
     }
 }
 
-
-/**
- *  @b Description
- *  @n
- *      Utility function for allocating from a static memory pool.
- *
- *  @param[in]  pool Handle to pool object.
- *  @param[in]  size Size in bytes to be allocated.
- *  @param[in]  align Alignment in bytes
- *
- *  \ingroup DPC_OBJDET__INTERNAL_FUNCTION
- *
- *  @retval
- *      pointer to beginning of allocated block. NULL indicates could not
- *      allocate.
- */
-void *DPC_ObjDet_MemPoolAlloc(MemPoolObj *pool,
-                              uint32_t size,
-                              uint8_t align)
-{
-    void *retAddr = NULL;
-    uintptr_t addr;
-
-    addr = MEM_ALIGN(pool->currAddr, align);
-    if ((addr + size) <= ((uintptr_t)pool->cfg.addr + pool->cfg.size))
-    {
-        retAddr = (void *)addr;
-        pool->currAddr = addr + size;
-        pool->maxCurrAddr = MAX(pool->currAddr, pool->maxCurrAddr);
-    }
-
-    return(retAddr);
-}
-
-/**
- *  @b Description
- *  @n
- *      The function allocates HWA DMA source channel from the pool
- *
- *  @param[in]  pool Handle to pool object.
- *
- *  @retval
- *      channel Allocated HWA trigger source channel
- */
-uint8_t DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(HwaDmaTrigChanPoolObj *pool)
-{
-    uint8_t channel = 0xFF;
-    if(pool->dmaTrigSrcNextChan < HWA_MAX_NUM_DMA_TRIG_CHANNELS)
-    {
-        channel = pool->dmaTrigSrcNextChan;
-        pool->dmaTrigSrcNextChan++;
-    }
-    return channel;
-}
-
-
 /**
 *  @b Description
 *  @n

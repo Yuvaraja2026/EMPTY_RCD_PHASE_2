@@ -23,8 +23,6 @@ const gpio       = scripting.addModule("/drivers/gpio/gpio", {}, false);
 const gpio1      = gpio.addInstance();
 const hwa        = scripting.addModule("/drivers/hwa/hwa", {}, false);
 const hwa1       = hwa.addInstance();
-const power      = scripting.addModule("/drivers/power/power", {}, false);
-const power1     = power.addInstance();
 const debug_log  = scripting.addModule("/kernel/dpl/debug_log");
 const mpu_armv7  = scripting.addModule("/kernel/dpl/mpu_armv7", {}, false);
 const mpu_armv71 = mpu_armv7.addInstance();
@@ -51,9 +49,6 @@ edma1.edmaRmReservedDmaCh[0].$name = "CONFIG_EDMA_RM9";
 gpio1.$name = "CONFIG_GPIO0";
 
 hwa1.$name = "CONFIG_HWA0";
-
-power1.$name          = "CONFIG_POWER0";
-power1.parkPins.$name = "drivers_power_v0_power_v0_pins0";
 
 debug_log.enableUartLog           = true;
 debug_log.uartLog.$name           = "CONFIG_UART0";
