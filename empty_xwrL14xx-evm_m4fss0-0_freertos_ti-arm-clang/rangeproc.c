@@ -38,101 +38,9 @@
 Edma_IntrObject     intrObj_rangeProc[2];
 extern MmwDemo_MSS_MCB gMmwMssMCB; 
 
-//static uint8_t gRangeProcHeapMem[RANGEPROCHWA_HEAP_MEM_SIZE] __attribute__((aligned(HeapP_BYTE_ALIGNMENT)));
 HWA_Handle hwaHandle;
 DPU_RangeProcHWA_Config rangeProcDpuCfg;
 
-
-/**
- *  @b Description
- *  @n
- *      The function is rangeProc DPU init function. It allocates memory to store
- *  its internal data object and returns a handle if it executes successfully.
- *
- *  @param[in]  initParams              Pointer to DPU init parameters
- *  @param[in]  errCode                 Pointer to errCode generates from the API
- *
- *  \ingroup    DPU_RANGEPROC_EXTERNAL_FUNCTION
- *
- *  @retval
- *      Success     - valid rangeProc handle
- *  @retval
- *      Error       - NULL
- */
-// DPU_RangeProcHWA_Handle DPU_RangeProcHWA_init
-// (
-//     DPU_RangeProcHWA_InitParams     *initParams,
-//     int32_t*                        errCode
-// )
-// {
-//     rangeProcHWAObj     *rangeProcObj = NULL;
-//     // SemaphoreP_Params   semParams;
-//     HWA_MemInfo         hwaMemInfo;
-//     uint8_t             index;
-//     int32_t             status = SystemP_SUCCESS;
-
-//     *errCode = 0;
-
-//     if( (initParams == NULL) ||
-//        (initParams->hwaHandle == NULL) )
-//     {
-//         *errCode = DPU_RANGEPROCHWA_EINVAL;
-//         goto exit;
-//     }
-
-//     /* Allocate Memory for rangeProc */
-//     rangeProcObj = (rangeProcHWAObj*)&gRangeProcHeapMem;
-//     if(rangeProcObj == NULL)
-//     {
-//         *errCode = DPU_RANGEPROCHWA_ENOMEM;
-//         goto exit;
-//     }
-
-//     /* Initialize memory */
-//     memset((void *)rangeProcObj, 0, sizeof(rangeProcHWAObj));
-
-//     memcpy((void *)&rangeProcObj->initParms, initParams, sizeof(DPU_RangeProcHWA_InitParams));
-
-//     /* Set HWA bank memory address */
-//     *errCode =  HWA_getHWAMemInfo(initParams->hwaHandle, &hwaMemInfo);
-//     if (*errCode < 0)
-//     {
-//         goto exit;
-//     }
-
-//     for (index = 0; index < hwaMemInfo.numBanks; index++)
-//     {
-//         rangeProcObj->hwaMemBankAddr[index] = hwaMemInfo.baseAddress + index * hwaMemInfo.bankSize;
-//     }
-
-//     /* Create semaphore for EDMA done */
-//     status = SemaphoreP_constructBinary(&rangeProcObj->edmaDoneSemaHandle, 0);
-//     if(status != SystemP_SUCCESS)
-//     {
-//         *errCode = DPU_RANGEPROCHWA_ESEMA;
-//         goto exit;
-//     }
-
-//     /* Create semaphore for HWA done */
-//     status = SemaphoreP_constructBinary(&rangeProcObj->hwaDoneSemaHandle, 0);
-//     if(status != SystemP_SUCCESS)
-//     {
-//         *errCode = DPU_RANGEPROCHWA_ESEMA;
-//         goto exit;
-//     }
-
-// exit:
-//     if(*errCode < 0)
-//     {
-//         rangeProcObj = (DPU_RangeProcHWA_Handle)NULL;
-//     }
-//     else
-//     {
-//         /* Fall through */
-//     }
-//     return ((DPU_RangeProcHWA_Handle)rangeProcObj);
-
-// }
 
 
 /**
@@ -155,62 +63,6 @@ void rangeProc_dpuInit()
         return;
     }
 }
-
-
-/**
- *  @b Description
- *  @n
- *      Utility function for allocating from a static memory pool.
- *
- *  @param[in]  pool Handle to pool object.
- *  @param[in]  size Size in bytes to be allocated.
- *  @param[in]  align Alignment in bytes
- *
- *  \ingroup DPC_OBJDET__INTERNAL_FUNCTION
- *
- *  @retval
- *      pointer to beginning of allocated block. NULL indicates could not
- *      allocate.
- */
-void *DPC_ObjDet_MemPoolAlloc(MemPoolObj *pool,
-                              uint32_t size,
-                              uint8_t align)
-{
-    void *retAddr = NULL;
-    uintptr_t addr;
-
-    addr = MEM_ALIGN(pool->currAddr, align);
-    if ((addr + size) <= ((uintptr_t)pool->cfg.addr + pool->cfg.size))
-    {
-        retAddr = (void *)addr;
-        pool->currAddr = addr + size;
-        pool->maxCurrAddr = MAX(pool->currAddr, pool->maxCurrAddr);
-    }
-
-    return(retAddr);
-}
-
-/**
- *  @b Description
- *  @n
- *      The function allocates HWA DMA source channel from the pool
- *
- *  @param[in]  pool Handle to pool object.
- *
- *  @retval
- *      channel Allocated HWA trigger source channel
- */
-uint8_t DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(HwaDmaTrigChanPoolObj *pool)
-{
-    uint8_t channel = 0xFF;
-    if(pool->dmaTrigSrcNextChan < HWA_MAX_NUM_DMA_TRIG_CHANNELS)
-    {
-        channel = pool->dmaTrigSrcNextChan;
-        pool->dmaTrigSrcNextChan++;
-    }
-    return channel;
-}
-
 
 /**
 *  @b Description
