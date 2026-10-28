@@ -301,13 +301,13 @@ void MinimalRadar_runStage(void)
     
         DPU_RangeProcHWA_OutParams rangeOut;
         memset((void*)&rangeOut, 0, sizeof(rangeOut));
+        DPU_DoaProc_OutParams doaOut;
         MinimalRadar_sendText("Before process\r\n");
 
     while(1)
     {
        int32_t retVal = DPU_RangeProcHWA_process(gMmwMssMCB.rangeProcDpuHandle,&rangeOut);
-
-       // MinimalRadar_sendText("After process A\r\n");
+          // MinimalRadar_sendText("After process A\r\n");
 
         if (retVal < 0)
         {
@@ -315,6 +315,8 @@ void MinimalRadar_runStage(void)
             {
             }
         }
+        if (DPU_DoaProc_process(gMmwMssMCB.doaProcDpuHandle, &gMmwMssMCB.radarCubeSrc[0], &gMmwMssMCB.detMatrix[0], &doaOut) < 0) { while (1) { } }
+
         gFrameCounter++;
 
         if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
