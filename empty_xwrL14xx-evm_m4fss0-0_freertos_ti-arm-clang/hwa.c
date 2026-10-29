@@ -9,8 +9,6 @@
 #include "mmw_flash_cal.h"
 #include "factory_cal.h"
 #include "mmwave_control/interrupts.h"
-//#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
-#include <datapath/dpu/doaproc/v0/doaproc.h>
 #include "dpc/dpc.h"
 
 #include "ti_drivers_config.h"
@@ -18,19 +16,42 @@
 #include "hwa.h"
 #include "radar_memory.h"
 
-
+#define MMW_DEMO_MINOR_MODE 0
+#define MMW_DEMO_MAJOR_MODE 1
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
+/** Declare RangeProc HWA DPU configuration */
 DPU_RangeProcHWA_Config rangeProcDpuCfg;
-extern  DPU_DoaProc_Config doaProcDpuCfg;
+
+/** Declare DoA DPU configuration */
+DPU_DoaProc_Config doaProcDpuCfg;
+
+/** Declare CFAR HWA DPU configuration */
+DPU_CFARProcHWA_Config cfarProcDpuCfg;
+
+/** Declare CFAR HWA DPU output parameters */
+DPU_CFARProcHWA_OutParams outParmsCfar;
+
+/** Declare function to populate default chirp control configuration */
 extern void Mmwave_populateDefaultChirpControlCfg(MMWave_CtrlCfg *ptrCtrlCfg);
+
+/** Declare function to initialize the RangeProc DPU */
 extern void rangeProc_dpuInit();
+
+/** Declare function to initialize the DoA DPU */
 extern void doaProc_dpuInit();
+
+/** Declare function to calculate active antenna geometry */
 extern void MmwDemo_calcActiveAntennaGeometry();
+
+/** Declare function to parse and configure DoA processing parameters */
 extern int32_t DoaProc_configParser();
-extern int32_t MmwDemo_cfgDopplerParamMapping(DPU_DoaProc_HWA_Option_Cfg *dopplerParamCfg, uint32_t mappingOption);
+
+/** Declare function to configure Doppler parameter mapping */
+extern int32_t MmwDemo_cfgDopplerParamMapping(DPU_DoaProc_HWA_Option_Cfg *dopplerParamCfg,uint32_t mappingOption);
+
+
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
-//static HWA_Handle gHwaHandle = NULL;
  HWA_Handle hwaHandle;
 
 /* Declare a volatile global status variable for HWA operations, initialized to a success code */
@@ -56,8 +77,10 @@ float gSocClk= 40000000;//hz reference from mmw_cli.c
  *  @retval
  *      none
  */
+/** Reset the next available HWA DMA trigger source channel */
 void DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(HwaDmaTrigChanPoolObj *pool)
 {
+    /** Reset the DMA trigger source channel index */
     pool->dmaTrigSrcNextChan = 0;
 }
 
@@ -73,9 +96,13 @@ void DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(HwaDmaTrigChanPoolObj *pool)
  *  @retval
  *      none.
  */
+/** Reset the memory pool current address to the configured start address */
 void DPC_ObjDet_MemPoolReset(MemPoolObj *pool)
 {
+    /** Set the current allocation address to the pool start address */
     pool->currAddr = (uintptr_t)pool->cfg.addr;
+
+    /** Initialize the maximum current address to the current address */
     pool->maxCurrAddr = pool->currAddr;
 }
 
@@ -94,6 +121,7 @@ void DPC_ObjDet_MemPoolReset(MemPoolObj *pool)
 
 static void MinimalRadar_loadRfDefaults(void)
 {
+    /** Copy the antenna geometry configuration into the global configuration */
     memcpy(&gMmwMssMCB.antennaGeometryCfg,&gMinimalAntGeometry,sizeof(MmwDemo_antennaGeometryCfg));
     gMmwMssMCB.channelCfg.h_RxChCtrlBitMask = 7U;
     gMmwMssMCB.channelCfg.h_TxChCtrlBitMask = 3U;
@@ -144,19 +172,27 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.sigProcChainCfg.minorMotionVelocityInclusionThr = 0.5f;
     gMmwMssMCB.sigProcChainCfg.dopElevDimReductOrder = 0U;
 
-    gMmwMssMCB.enableMajorMotion = 0U;
-    gMmwMssMCB.enableMinorMotion = 1U;
+
+    gMmwMssMCB.enableMajorMotion = 1U;
+    gMmwMssMCB.enableMinorMotion = 0U;
 
     memset(&gMmwMssMCB.sensorStart, 0, sizeof(gMmwMssMCB.sensorStart));
 }
 
+/** Define the UART text sending function */
 static void MinimalRadar_sendText(const char *text)
 {
-    UART_Transaction transaction;
-    UART_Transaction_init(&transaction);
-    transaction.buf = (void *)text;
-    transaction.count = (uint32_t)strlen(text);
-    (void)UART_write(gUartHandle[0], &transaction);
+    UART_Transaction transaction;            /** Declare a UART transaction object */
+
+
+    UART_Transaction_init(&transaction);      /** Initialize the UART transaction */
+
+    transaction.buf = (void *)text;             /** Set the text buffer for transmission */
+
+    transaction.count = (uint32_t)strlen(text);    /** Set the number of characters to transmit */
+
+    (void)UART_write(gUartHandle[0], &transaction);    /** Send the text through UART */
+
 }
 
 void MinimalRadar_runStage(void)
@@ -193,9 +229,12 @@ void MinimalRadar_runStage(void)
         }
     
     MinimalRadar_sendText("MMWave Init OK\r\n");
-      MinimalRadar_loadRfDefaults();
+
+    /** Load RF default configuration parameters */
+    MinimalRadar_loadRfDefaults();
     /* Stop here: inspect channelCfg and antenna counts in CCS. */
-    MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
+    MinimalRadar_sendText("load RF_config done.\r\n");
+
         /* Reference requires valid RF synth trim before calibration. */
     if (SOC_rcmReadSynthTrimValid() == RF_SYNTH_TRIM_VALID)
     {
@@ -203,25 +242,32 @@ void MinimalRadar_runStage(void)
     }
     else { while (1) { } }
     MinimalRadar_sendText("RF trim OK\r\n");
+
         /*mmw_flash_cal_initializatin */
     if (mmwDemo_flashInit() < 0) { while (1) { } }
     MinimalRadar_sendText("Flash init OK\r\n");
+
         /* Factory-calibration implementation */
     if (mmwDemo_factoryCal() < 0) { while (1) { } }
     MinimalRadar_sendText("Factory calibration OK\r\n");
+
         /* T018: open RF module only after mmwOpenCfg is populated from the reference control code. */
     if (MMWave_open(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwOpenCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
     MinimalRadar_sendText("MMWave open OK\r\n");
+
+
    // MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
     /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
     Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwCtrlCfg);
     /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
     MinimalRadar_sendText("populated default chirp control cfg.\r\n");
+
+    /*Configure MMWave control parameters and halt on configuration failure */
     if (MMWave_config(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwCtrlCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
     MinimalRadar_sendText("RF configuration accepted\r\n");
+
         /* Register the reference frame-start interrupt;*/
     if (mmwDemo_registerFrameStartInterrupt() != 0) { while (1) { } }
-    /* Stop before sensor start. */
     MinimalRadar_sendText("Frame start interrupt registered.\r\n");
     
     /* DPU init/config implementations are preserved in ti_reference_extract.c. */
@@ -254,6 +300,7 @@ void MinimalRadar_runStage(void)
     DPC_ObjDet_MemPoolReset(
         &gMmwMssMCB.L3RamObj);
 
+    /** Reset the Core Local RAM memory pool */
     DPC_ObjDet_MemPoolReset(
         &gMmwMssMCB.CoreLocalRamObj);
 
@@ -262,36 +309,56 @@ void MinimalRadar_runStage(void)
     DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(
         &gMmwMssMCB.HwaDmaChanPoolObj);
 
+    /** Parse and configure RangeProc parameters */
     if (RangeProc_configParser() < 0) { while (1) { } }
     MinimalRadar_sendText("RangeProc_configParser ok\r\n");
 
+    /** Configure the RangeProc HWA DPU */
     if (DPU_RangeProcHWA_config(gMmwMssMCB.rangeProcDpuHandle, &rangeProcDpuCfg) < 0) { while (1) { } }
     MinimalRadar_sendText("DPU_RangeProcHWA_config ok\r\n");
 
+    /** Calculate the active antenna geometry */
     MmwDemo_calcActiveAntennaGeometry();
     MinimalRadar_sendText("ActiveAntennaGeometry ok\r\n");
     
+    /** Initialize the DoA processing DPU */
     doaProc_dpuInit();
+    /** Check whether the DoA DPU handle was successfully created */
     if (gMmwMssMCB.doaProcDpuHandle == NULL)
     {
         while (1) {}
     }
     MinimalRadar_sendText("Doa init ok\r\n");
 
+    /** Parse and configure DoA processing parameters */
     if (DoaProc_configParser() < 0) { while (1) { } }
     MinimalRadar_sendText("DoaProc_configParser ok\r\n");
 
-    //     /* The mapping helper is copied exactly from dpc.c; inspect every srcBcnt before DoA config. */
-    // if (MmwDemo_cfgDopplerParamMapping(&doaProcDpuCfg.hwRes.hwaCfg.doaRngGateCfg, DOPPLER_OUTPUT_MAPPING_DOP_ROW_COL) < 0) { while (1) { } }
-    // MinimalRadar_sendText("MmwDemo_cfgDopplerParamMapping ok\r\n");
-
+    /** Configure the DoA processing DPU */
     if (DPU_DoaProc_config(gMmwMssMCB.doaProcDpuHandle, &doaProcDpuCfg) < 0) { while (1) { } }
     MinimalRadar_sendText("DPU_DoaProc_config ok\r\n");
 
+    /** Initialize the CFAR processing DPU */
+    cfarProc_dpuInit();
+    if (gMmwMssMCB.cfarProcDpuHandle == NULL)
+    {
+        while(1) {}
+    }
+    MinimalRadar_sendText("cfarProc_dpuInit ok\r\n");
+
+    /** Parse and configure CFAR processing parameters */
+    if (CfarProc_configParser() < 0) { while (1) { } }
+    MinimalRadar_sendText("CfarProc_configParser ok\r\n");
+
+    /** Configure the CFAR processing HWA DPU */
+    if (DPU_CFARProcHWA_config(gMmwMssMCB.cfarProcDpuHandle, &cfarProcDpuCfg)< 0){while(1) {}}   
+    MinimalRadar_sendText("DPU_CFARProcHWA_config ok\r\n");
+    
+    /** Trigger RangeProc HWA processing */
     if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
     MinimalRadar_sendText("DPU_RangeProcHWA_control and trigger ok\r\n");
 
-
+    /** Start the radar sensor */
     if (MmwDemo_startSensor() < 0)
     {
         while (1) {}
@@ -299,14 +366,21 @@ void MinimalRadar_runStage(void)
 
     MinimalRadar_sendText("Sensor Started\r\n");
     
-        DPU_RangeProcHWA_OutParams rangeOut;
-        memset((void*)&rangeOut, 0, sizeof(rangeOut));
-        DPU_DoaProc_OutParams doaOut;
-        MinimalRadar_sendText("Before process\r\n");
+    /** Declare RangeProc output parameters */
+    DPU_RangeProcHWA_OutParams rangeOut;
+
+    /** Initialize RangeProc output parameters to zero */
+    memset((void*)&rangeOut, 0, sizeof(rangeOut));
+
+    /** Declare DoA processing output parameters */
+    DPU_DoaProc_OutParams doaOut;
+
+    MinimalRadar_sendText("Before process\r\n");
 
     while(1)
     {
-       int32_t retVal = DPU_RangeProcHWA_process(gMmwMssMCB.rangeProcDpuHandle,&rangeOut);
+        /** Process the RangeProc HWA and generate range processing output */
+        int32_t retVal = DPU_RangeProcHWA_process(gMmwMssMCB.rangeProcDpuHandle,&rangeOut);
           // MinimalRadar_sendText("After process A\r\n");
 
         if (retVal < 0)
@@ -315,10 +389,13 @@ void MinimalRadar_runStage(void)
             {
             }
         }
+        /** Process the DoA data and generate DoA output */
         if (DPU_DoaProc_process(gMmwMssMCB.doaProcDpuHandle, &gMmwMssMCB.radarCubeSrc[0], &gMmwMssMCB.detMatrix[0], &doaOut) < 0) { while (1) { } }
-
+        
+        if(DPU_CFARProcHWA_process(gMmwMssMCB.cfarProcDpuHandle,&gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE],&gMmwMssMCB.cfarRunTimeInputParams[MMW_DEMO_MAJOR_MODE],&outParmsCfar)< 0) { while (1) { } }
         gFrameCounter++;
 
+        /** Trigger RangeProc HWA processing */
         if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
     }
 }

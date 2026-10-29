@@ -3,5 +3,5 @@
 
 
 void MinimalRadar_runStage(void);
-
+int32_t CfarProc_configParser();
 #endif

@@ -263,49 +263,6 @@ uint8_t DPC_ObjDet_HwaDmaTrigSrcChanPoolAlloc(HwaDmaTrigChanPoolObj *pool)
 /**
 *  @b Description
 *  @n
-*        Function configuring DOA DPU
-*/
-// void mmwDemo_doaProcConfig()
-// {
-//     //uint32_t i;
-//     int32_t retVal = 0;
-//     uint32_t numSamples;
-//     DPU_DoaProc_HW_Resources  *hwRes;
-
-//     hwRes = &doaProcDpuCfg.hwRes;
-
-//     retVal = DoaProc_configParser();
-//     if (retVal < 0)
-//     {
-//         DebugP_log("Error: Error in setting up doa profile:%d \n", retVal);
-//         DebugP_assert(0);
-//     }
-
-//     /* Note: chunk[1] is not used */
-//     /* Major motion - set input source and destination address */
-//     numSamples = doaProcDpuCfg.staticCfg.numVirtualAntennas * doaProcDpuCfg.staticCfg.numDopplerChirps;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MAJOR_MODE].chunk[0].srcAddress = (uint32_t) gMmwMssMCB.radarCube[0].data;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MAJOR_MODE].chunk[0].dstAddress = hwRes->hwaCfg.hwaMemInpAddr;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MAJOR_MODE].chunk[0].Bcnt_Acnt = (numSamples << 16)   | sizeof(cmplx16ImRe_t);
-
-//     /* Minor Motion set input source and destination address */
-//     numSamples = doaProcDpuCfg.staticCfg.numVirtualAntennas * doaProcDpuCfg.staticCfg.numDopplerChirps;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MINOR_MODE].chunk[0].srcAddress = (uint32_t) gMmwMssMCB.radarCube[1].data;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MINOR_MODE].chunk[0].dstAddress = hwRes->hwaCfg.hwaMemInpAddr;
-//     gMmwMssMCB.radarCubeSrc[MMW_DEMO_MINOR_MODE].chunk[0].Bcnt_Acnt = (numSamples << 16)   | sizeof(cmplx16ImRe_t);
-
-//     retVal = DPU_DoaProc_config (gMmwMssMCB.doaProcDpuHandle, &doaProcDpuCfg);
-//     if (retVal < 0)
-//     {
-//         DebugP_log("DOA DPU config return error:%d \n", retVal);
-//         DebugP_assert(0);
-//     }
-
-// }
-
-/**
-*  @b Description
-*  @n
 *    Based on the configuration, set up the doa processing DPU configurations
 */
 int32_t DoaProc_configParser()
