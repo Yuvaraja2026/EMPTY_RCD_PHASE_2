@@ -9,8 +9,6 @@
 #include "mmw_flash_cal.h"
 #include "factory_cal.h"
 #include "mmwave_control/interrupts.h"
-//#include <datapath/dpu/rangeproc/v0/rangeprochwa.h>
-#include <datapath/dpu/doaproc/v0/doaproc.h>
 #include "dpc/dpc.h"
 
 #include "ti_drivers_config.h"
@@ -18,7 +16,8 @@
 #include "hwa.h"
 #include "radar_memory.h"
 
-#define MMW_DEMO_MINOR_MODE 1
+#define MMW_DEMO_MINOR_MODE 0
+#define MMW_DEMO_MAJOR_MODE 1
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 /** Declare RangeProc HWA DPU configuration */
@@ -173,8 +172,9 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.sigProcChainCfg.minorMotionVelocityInclusionThr = 0.5f;
     gMmwMssMCB.sigProcChainCfg.dopElevDimReductOrder = 0U;
 
-    gMmwMssMCB.enableMajorMotion = 0U;
-    gMmwMssMCB.enableMinorMotion = 1U;
+
+    gMmwMssMCB.enableMajorMotion = 1U;
+    gMmwMssMCB.enableMinorMotion = 0U;
 
     memset(&gMmwMssMCB.sensorStart, 0, sizeof(gMmwMssMCB.sensorStart));
 }
@@ -392,7 +392,7 @@ void MinimalRadar_runStage(void)
         /** Process the DoA data and generate DoA output */
         if (DPU_DoaProc_process(gMmwMssMCB.doaProcDpuHandle, &gMmwMssMCB.radarCubeSrc[0], &gMmwMssMCB.detMatrix[0], &doaOut) < 0) { while (1) { } }
         
-        //if(DPU_CFARProcHWA_process(gMmwMssMCB.cfarProcDpuHandle,&gMmwMssMCB.detMatrix[MMW_DEMO_MINOR_MODE],&gMmwMssMCB.cfarRunTimeInputParams[MMW_DEMO_MINOR_MODE],&outParmsCfar)< 0) { while (1) { } }
+        if(DPU_CFARProcHWA_process(gMmwMssMCB.cfarProcDpuHandle,&gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE],&gMmwMssMCB.cfarRunTimeInputParams[MMW_DEMO_MAJOR_MODE],&outParmsCfar)< 0) { while (1) { } }
         gFrameCounter++;
 
         /** Trigger RangeProc HWA processing */
