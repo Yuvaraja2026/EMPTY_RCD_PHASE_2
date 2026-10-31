@@ -15,9 +15,11 @@
 #include "ti_drivers_open_close.h"
 #include "hwa.h"
 #include "radar_memory.h"
+#include "tracker_utils.h"
 
 #define MMW_DEMO_MINOR_MODE 0
 #define MMW_DEMO_MAJOR_MODE 1
+#define MAX_NUM_DETECTIONS 3
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 /** Declare RangeProc HWA DPU configuration */
@@ -50,6 +52,11 @@ extern int32_t DoaProc_configParser();
 /** Declare function to configure Doppler parameter mapping */
 extern int32_t MmwDemo_cfgDopplerParamMapping(DPU_DoaProc_HWA_Option_Cfg *dopplerParamCfg,uint32_t mappingOption);
 
+extern void trackerProc_dpuInit();
+
+extern void gtrack_free(void *pFree, unsigned int sizeInBytes);
+
+extern void *gtrack_alloc(unsigned int numElements, unsigned int sizeInBytes);
 
 /* Declare a static global handle for the Hardware Accelerator (HWA) driver, initialized to NULL */
  HWA_Handle hwaHandle;
@@ -62,7 +69,9 @@ static volatile int32_t gMmwaveErrCode = 0;
 
 static volatile uint32_t gFrameCounter = 0U;
 
-float gSocClk= 40000000;//hz reference from mmw_cli.c
+//hz reference from mmw_cli.c
+float gSocClk= 40000000;
+uint32_t numDetectedPoints[2];
 /* Reference-backed fixed RF configuration.
  * These field names and conversions come from mmw_cli.c in the supplied demo.
  */
@@ -145,6 +154,8 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.numRangeBins = 64U; /* real-only: pow2(128)/2 */
     gMmwMssMCB.isBpmEnabled = 1U;
 
+    gMmwMssMCB.numDopplerBins = 2U;
+
     gMmwMssMCB.profileTimeCfg.h_ChirpIdleTime = 60U; /* 6.00 us * 10 */
     gMmwMssMCB.profileTimeCfg.h_ChirpAdcStartTime = (28U << 10);
     gMmwMssMCB.profileTimeCfg.xh_ChirpTxStartTime = 0U;
@@ -172,7 +183,36 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.sigProcChainCfg.minorMotionVelocityInclusionThr = 0.5f;
     gMmwMssMCB.sigProcChainCfg.dopElevDimReductOrder = 0U;
 
+    
+    /* Tracker Configuration
+    *
+    * trackingCfg 1 2 60 3 80 50 250
+    */
+    gMmwMssMCB.trackerCfg.staticCfg.trackerEnabled = 1U;
 
+    /* Initial tracker parameter set */
+    gMmwMssMCB.trackerCfg.staticCfg.trackingParamSet = 3U;
+
+    /* GTRACK module configuration */
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.maxNumPoints = 60U;
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.maxNumTracks = 3U;
+
+    /* 80: Maximum radial velocity
+    * trackingCfg value is represented in 0.1 m/s
+    * 80 -> 8.0 m/s
+    */
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.maxVelocitymps = 8.0f;
+
+    /* 50: Radial velocity resolution
+    * trackingCfg value is represented in 0.001 m/s
+    * 50 -> 0.050 m/s
+    */
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.radialVelocityResolutionmps = 0.050f;
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.stateVectorType =GTRACK_STATE_VECTORS_2DA;
+    /* 250 ms frame period */
+    gMmwMssMCB.trackerCfg.staticCfg.gtrackModuleConfig.deltaT =((float)gMmwMssMCB.frameCfg.w_FramePeriodicity) /gSocClk;
+
+    
     gMmwMssMCB.enableMajorMotion = 1U;
     gMmwMssMCB.enableMinorMotion = 0U;
 
@@ -197,6 +237,16 @@ static void MinimalRadar_sendText(const char *text)
 
 void MinimalRadar_runStage(void)
 {
+    int32_t retVal;
+    /** Declare RangeProc output parameters */
+    DPU_RangeProcHWA_OutParams rangeOut;
+    /** Declare DoA processing output parameters */
+    DPU_DoaProc_OutParams doaOut;
+
+    DPU_CFARProcHWA_OutParams cfarOut;
+
+    DPC_ObjectDetection_ExecuteResult *result = &gMmwMssMCB.dpcResult;
+    
     /* T006: generated EDMA instance must already be opened by Drivers_open(). */
     if (gEdmaHandle[0] == NULL)
     {
@@ -255,8 +305,6 @@ void MinimalRadar_runStage(void)
     if (MMWave_open(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwOpenCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
     MinimalRadar_sendText("MMWave open OK\r\n");
 
-
-   // MinimalRadar_sendText("Stage reached - inspect CCS variables described in the design document.\r\n");
     /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
     Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwCtrlCfg);
     /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
@@ -277,37 +325,35 @@ void MinimalRadar_runStage(void)
         while (1) {}
     }
     MinimalRadar_sendText("Range DPU_init ok\r\n");
-    
-    /* Stop: verify gMmwMssMCB.doaProcDpuHandle != NULL. */
-    MinimalRadar_sendText("doaProc_dpuInit ok\r\n");
 
-    /* RangeProc_configParser is reference-backed; preserve its exact negative return value during debug. */
+    /******************************************************
+    * 1. INITIALIZE MEMORY POOLS
+    ******************************************************/
+
     /* Initialize the backing memory pools. */
-    gMmwMssMCB.L3RamObj.cfg.addr =
-        (void *)&gMmwL3[0];
+    gMmwMssMCB.L3RamObj.cfg.addr = (void *)&gMmwL3[0];
 
-    gMmwMssMCB.L3RamObj.cfg.size =
-        sizeof(gMmwL3);
+    gMmwMssMCB.L3RamObj.cfg.size = sizeof(gMmwL3);
 
-    gMmwMssMCB.CoreLocalRamObj.cfg.addr =
-        (void *)&gMmwCoreLocMem[0];
+    gMmwMssMCB.CoreLocalRamObj.cfg.addr = (void *)&gMmwCoreLocMem[0];
 
-    gMmwMssMCB.CoreLocalRamObj.cfg.size =
-        sizeof(gMmwCoreLocMem);
-
-
+    gMmwMssMCB.CoreLocalRamObj.cfg.size = sizeof(gMmwCoreLocMem);
+    /*
+     * IMPORTANT:
+     * Reset BEFORE any DPC_ObjDet_MemPoolAlloc().
+     */
     /* Initialize current allocation pointers. */
-    DPC_ObjDet_MemPoolReset(
-        &gMmwMssMCB.L3RamObj);
+    DPC_ObjDet_MemPoolReset(&gMmwMssMCB.L3RamObj);
 
     /** Reset the Core Local RAM memory pool */
-    DPC_ObjDet_MemPoolReset(
-        &gMmwMssMCB.CoreLocalRamObj);
-
+    DPC_ObjDet_MemPoolReset(&gMmwMssMCB.CoreLocalRamObj);
 
     /* RangeProc parser also allocates HWA DMA trigger channels. */
-    DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(
-        &gMmwMssMCB.HwaDmaChanPoolObj);
+    DPC_ObjDet_HwaDmaTrigSrcChanPoolReset(&gMmwMssMCB.HwaDmaChanPoolObj);
+    /******************************************************
+     * 2. CONSTRUCT TRACKER HEAP
+     ******************************************************/
+    HeapP_construct(&gMmwMssMCB.CoreLocalTrackerHeapObj,(void *)gMmwCoreLocMem2,MMWDEMO_OBJDET_CORE_LOCAL_MEM2_SIZE);
 
     /** Parse and configure RangeProc parameters */
     if (RangeProc_configParser() < 0) { while (1) { } }
@@ -334,10 +380,16 @@ void MinimalRadar_runStage(void)
     if (DoaProc_configParser() < 0) { while (1) { } }
     MinimalRadar_sendText("DoaProc_configParser ok\r\n");
 
+    /******************************************************
+     * 4. DoA CONFIGURATION
+     ******************************************************/
     /** Configure the DoA processing DPU */
     if (DPU_DoaProc_config(gMmwMssMCB.doaProcDpuHandle, &doaProcDpuCfg) < 0) { while (1) { } }
     MinimalRadar_sendText("DPU_DoaProc_config ok\r\n");
 
+    /******************************************************
+     * 5. CFAR INITIALIZATION / CONFIG PARSER
+     ******************************************************/
     /** Initialize the CFAR processing DPU */
     cfarProc_dpuInit();
     if (gMmwMssMCB.cfarProcDpuHandle == NULL)
@@ -349,10 +401,54 @@ void MinimalRadar_runStage(void)
     /** Parse and configure CFAR processing parameters */
     if (CfarProc_configParser() < 0) { while (1) { } }
     MinimalRadar_sendText("CfarProc_configParser ok\r\n");
+    /******************************************************
+     * 6. ALLOCATE CFAR CARTESIAN OUTPUT
+     *
+     * THIS BUFFER GOES TO TRACKER.
+     ******************************************************/
+    gMmwMssMCB.cfarDetObjOut =
+        (DPIF_PointCloudCartesianExt *)
+        DPC_ObjDet_MemPoolAlloc(
+            &gMmwMssMCB.L3RamObj,
+            MAX_NUM_DETECTIONS *
+                sizeof(DPIF_PointCloudCartesianExt),
+            sizeof(uint32_t));
 
+    if (gMmwMssMCB.cfarDetObjOut == NULL)
+    {
+        while (1) {}
+    }
+    /******************************************************
+     * 7. ALLOCATE CFAR INDEX OUTPUT
+     ******************************************************/
+        gMmwMssMCB.dpcObjIndOut =
+        (DPIF_PointCloudRngAzimElevDopInd *)
+        DPC_ObjDet_MemPoolAlloc(
+            &gMmwMssMCB.L3RamObj,
+            MAX_NUM_DETECTIONS *
+                sizeof(DPIF_PointCloudRngAzimElevDopInd),
+            sizeof(uint32_t));
+
+    if (gMmwMssMCB.dpcObjIndOut == NULL)
+    {
+        while (1) {}
+    }
+    /******************************************************
+     * 8. CFAR CONFIG API
+     ******************************************************/
     /** Configure the CFAR processing HWA DPU */
     if (DPU_CFARProcHWA_config(gMmwMssMCB.cfarProcDpuHandle, &cfarProcDpuCfg)< 0){while(1) {}}   
     MinimalRadar_sendText("DPU_CFARProcHWA_config ok\r\n");
+
+    trackerProc_dpuInit();
+    if (gMmwMssMCB.trackerProcDpuHandle == NULL)
+    {
+        while(1){}
+    }
+    MinimalRadar_sendText("trackerProc_dpuInit ok\r\n");
+
+    if(DPU_TrackerProc_config(gMmwMssMCB.trackerProcDpuHandle, &gMmwMssMCB.trackerCfg)< 0) { while (1) { } }
+    MinimalRadar_sendText("mmwDemo_trackerConfig ok\r\n");
     
     /** Trigger RangeProc HWA processing */
     if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
@@ -365,37 +461,118 @@ void MinimalRadar_runStage(void)
     }
 
     MinimalRadar_sendText("Sensor Started\r\n");
-    
-    /** Declare RangeProc output parameters */
-    DPU_RangeProcHWA_OutParams rangeOut;
-
     /** Initialize RangeProc output parameters to zero */
     memset((void*)&rangeOut, 0, sizeof(rangeOut));
-
-    /** Declare DoA processing output parameters */
-    DPU_DoaProc_OutParams doaOut;
-
     MinimalRadar_sendText("Before process\r\n");
 
-    while(1)
+while (1)
+{
+    uint16_t numDetectedPoints;
+    /******************************************************
+     * A. RANGE PROCESSING
+     ******************************************************/
+    memset(&rangeOut, 0, sizeof(rangeOut));
+
+    retVal = DPU_RangeProcHWA_process(
+        gMmwMssMCB.rangeProcDpuHandle,
+        &rangeOut);
+
+    if (retVal < 0)
     {
-        /** Process the RangeProc HWA and generate range processing output */
-        int32_t retVal = DPU_RangeProcHWA_process(gMmwMssMCB.rangeProcDpuHandle,&rangeOut);
-          // MinimalRadar_sendText("After process A\r\n");
-
-        if (retVal < 0)
-        {
-            while (1)
-            {
-            }
-        }
-        /** Process the DoA data and generate DoA output */
-        if (DPU_DoaProc_process(gMmwMssMCB.doaProcDpuHandle, &gMmwMssMCB.radarCubeSrc[0], &gMmwMssMCB.detMatrix[0], &doaOut) < 0) { while (1) { } }
-        
-        if(DPU_CFARProcHWA_process(gMmwMssMCB.cfarProcDpuHandle,&gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE],&gMmwMssMCB.cfarRunTimeInputParams[MMW_DEMO_MAJOR_MODE],&outParmsCfar)< 0) { while (1) { } }
-        gFrameCounter++;
-
-        /** Trigger RangeProc HWA processing */
-        if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
+        while (1) {}
     }
+    /******************************************************
+     * B. DoA / DOPPLER PROCESSING
+     ******************************************************/
+    memset(&doaOut, 0, sizeof(doaOut));
+
+    retVal = DPU_DoaProc_process(
+        gMmwMssMCB.doaProcDpuHandle,
+        &gMmwMssMCB.radarCubeSrc[MMW_DEMO_MAJOR_MODE],
+        &gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE],
+        &doaOut);
+
+    if (retVal < 0)
+    {
+        while (1) {}
+    }
+    /******************************************************
+     * C. PREPARE CFAR OUTPUT POINTERS
+     ******************************************************/
+    memset(&cfarOut, 0, sizeof(cfarOut));
+    /*
+     * THIS is the Cartesian point cloud that Tracker needs.
+     */
+    cfarOut.detObjOut = gMmwMssMCB.cfarDetObjOut;
+    /*
+     * CFAR detection index information.
+     */
+    cfarOut.detObjIndOut = gMmwMssMCB.dpcObjIndOut;
+    /*
+     * Do NOT use maxNumTracks here.
+     *
+     * CFAR points != tracked objects.
+     */
+    cfarOut.detObjOutMaxSize = MAX_NUM_DETECTIONS;
+    cfarOut.rangeProfile = gMmwMssMCB.rangeProfile[MMW_DEMO_MAJOR_MODE];
+    /******************************************************
+     * D. CFAR PROCESS
+     ******************************************************/
+    retVal = DPU_CFARProcHWA_process(
+        gMmwMssMCB.cfarProcDpuHandle,
+        &gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE],
+        &gMmwMssMCB.cfarRunTimeInputParams[
+            MMW_DEMO_MAJOR_MODE],
+        &cfarOut);
+
+    if (retVal < 0)
+    {
+        while (1) {}
+    }
+    /******************************************************
+     * E. NUMBER OF VALID CFAR POINTS
+     ******************************************************/
+    numDetectedPoints = (uint16_t)cfarOut.numCfarDetectedPoints;
+    /******************************************************
+     * F. TRACKER PROCESS
+     ******************************************************/
+    retVal = DPU_TrackerProc_process(
+        gMmwMssMCB.trackerProcDpuHandle,
+
+        (uint32_t)numDetectedPoints,
+
+        /*
+         * Pass exactly the pointer CFAR used.
+         */
+        cfarOut.detObjOut,
+
+        &result->trackerOutParams);
+
+    if (retVal < 0)
+    {
+        while (1)
+        {
+            /*
+             * inspect retVal in CCS
+             */
+        }
+    }
+    /******************************************************
+     * G. CURRENT FRAME FINISHED
+     ******************************************************/
+    gFrameCounter++;
+    /******************************************************
+     * H. TRIGGER RANGE FOR NEXT FRAME
+     ******************************************************/
+    retVal = DPU_RangeProcHWA_control(
+        gMmwMssMCB.rangeProcDpuHandle,
+        DPU_RangeProcHWA_Cmd_triggerProc,
+        NULL,
+        0U);
+
+    if (retVal < 0)
+    {
+        while (1) {}
+    }
+}
 }
