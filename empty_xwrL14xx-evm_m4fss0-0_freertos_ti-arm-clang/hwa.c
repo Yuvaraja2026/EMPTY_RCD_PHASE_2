@@ -27,6 +27,9 @@
 #endif
 #define MAX_NUM_DETECTIONS 60
 
+#define MAX_RADAR_OBJECTS 10U
+
+RadarObject_t radarObjects[MAX_RADAR_OBJECTS] = {0};
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
 /** Declare RangeProc HWA DPU configuration */
@@ -856,10 +859,10 @@ void MinimalRadar_runStage(void)
     /** Initialize RangeProc output parameters to zero */
     memset((void*)&rangeOut, 0, sizeof(rangeOut));
     MinimalRadar_sendText("Before process\r\n");
-    float X[10];
-    float Y[10];
-    float Vx[10];
-    float Vy[10];
+    // float X[10];
+    // float Y[10];
+    // float Vx[10];
+    // float Vy[10];
 
 while (1)
 {
@@ -1009,16 +1012,42 @@ while (1)
         }
     }
     uint32_t i;
-    if (result->trackerOutParams.numTargets > 0U)
-    {
-        for (i = 0U; i < result->trackerOutParams.numTargets; i++)
-        {
-            X[i]  = result->trackerOutParams.tList[i].posX;
-            Y[i]  = result->trackerOutParams.tList[i].posY;
+    // float X[10];
+    // float Y[10];
+    // float Vx[10];
+    // float Vy[10];
+    // if (result->trackerOutParams.numTargets > 0U)
+    // {
+    //     for (i = 0U; i < result->trackerOutParams.numTargets; i++)
+    //     {
+    //         X[i]  = result->trackerOutParams.tList[i].posX;
+    //         Y[i]  = result->trackerOutParams.tList[i].posY;
 
-            Vx[i] = result->trackerOutParams.tList[i].velX;
-            Vy[i] = result->trackerOutParams.tList[i].velY;
-        }
+    //         Vx[i] = result->trackerOutParams.tList[i].velX;
+    //         Vy[i] = result->trackerOutParams.tList[i].velY;
+    //     }
+    // }
+
+    uint32_t numTargets;
+
+    numTargets = result->trackerOutParams.numTargets;
+
+    if (numTargets > MAX_RADAR_OBJECTS)
+    {
+        numTargets = MAX_RADAR_OBJECTS;
+    }
+
+    for (i = 0U; i < numTargets; i++)
+    {
+        RadarObject_t object = {0};
+
+        object.x  = result->trackerOutParams.tList[i].posX;
+        object.y  = result->trackerOutParams.tList[i].posY;
+
+        object.vx = result->trackerOutParams.tList[i].velX;
+        object.vy = result->trackerOutParams.tList[i].velY;
+
+        radarObjects[i] = object;
     }
     /******************************************************
      * G. CURRENT FRAME FINISHED
