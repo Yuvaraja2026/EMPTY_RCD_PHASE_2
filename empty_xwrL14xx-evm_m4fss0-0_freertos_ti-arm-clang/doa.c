@@ -375,7 +375,7 @@ int32_t DoaProc_configParser()
     doaStaticCfg->azimuthFftSize        = gMmwMssMCB.sigProcChainCfg.azimuthFftSize;
     doaStaticCfg->elevationFftSize      = gMmwMssMCB.sigProcChainCfg.elevationFftSize;
     doaStaticCfg->isStaticClutterRemovalEnabled = gMmwMssMCB.staticClutterRemovalEnable;
-    doaStaticCfg->isRxChGainPhaseCompensationEnabled   = 1;
+    doaStaticCfg->isRxChGainPhaseCompensationEnabled   = 0;
     doaStaticCfg->doaRangeLoopType = 0;
     doaStaticCfg->dopElevDimReductOrder = gMmwMssMCB.sigProcChainCfg.dopElevDimReductOrder;
 
