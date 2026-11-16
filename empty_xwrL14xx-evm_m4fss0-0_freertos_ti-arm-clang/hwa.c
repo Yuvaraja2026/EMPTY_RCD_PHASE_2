@@ -28,7 +28,7 @@
 #define MAX_NUM_DETECTIONS 60
 
 #define MAX_RADAR_OBJECTS 10U
-
+#define TRACKER_UART_BUFFER_SIZE  128U
 RadarObject_t radarObjects[MAX_RADAR_OBJECTS] = {0};
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
@@ -86,7 +86,6 @@ uint32_t numDetectedPoints[2];
 /* Reference-backed fixed RF configuration.
  * These field names and conversions come from mmw_cli.c in the supplied demo.
  */
-
 
     volatile uint32_t gHwaBank0NonZero = 0U;
     volatile uint32_t gHwaBank1NonZero = 0U;
@@ -317,12 +316,12 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.trackerCfg.staticCfg.gatingParams.gain = 3.0f;
 
     gMmwMssMCB.trackerCfg.staticCfg.gatingParams.limitsArray[0] = 4.0f;
-  gMmwMssMCB.trackerCfg.staticCfg.gatingParams.limits.width = 4.0f;
+    gMmwMssMCB.trackerCfg.staticCfg.gatingParams.limitsArray[1] = 4.0f;
     gMmwMssMCB.trackerCfg.staticCfg.gatingParams.limitsArray[2] = 10.0f;
     gMmwMssMCB.trackerCfg.staticCfg.gatingParams.limitsArray[3] = 4.0f;
 
 
-        /* ADC logging configuration: adcLogging 0 */
+    /* ADC logging configuration: adcLogging 0 */
     gMmwMssMCB.adcLogging.enable = 0U;
 	gMmwMssMCB.lowPowerMode = 0U;
 
@@ -492,7 +491,47 @@ static void MinimalRadar_sendText(const char *text)
     (void)UART_write(gUartHandle[0], &transaction);    /** Send the text through UART */
 
 }
+static void MinimalRadar_sendTrackerOutput(
+    uint32_t frameNumber,
+    DPC_ObjectDetection_ExecuteResult *result)
+{
+    char txBuffer[TRACKER_UART_BUFFER_SIZE];
+    uint32_t i;
+    uint32_t numTargets;
 
+    numTargets = result->trackerOutParams.numTargets;
+
+    if (numTargets > MAX_RADAR_OBJECTS)
+    {
+        numTargets = MAX_RADAR_OBJECTS;
+    }
+
+    if (numTargets == 0U)
+    {
+        snprintf(txBuffer, sizeof(txBuffer),
+                 "T,%lu,0,-1,0,0,0,0\r\n",
+                 (unsigned long)frameNumber);
+
+        MinimalRadar_sendText(txBuffer);
+    }
+    else
+    {
+        for (i = 0U; i < numTargets; i++)
+        {
+            snprintf(txBuffer, sizeof(txBuffer),
+                     "T,%lu,%lu,%ld,%ld,%ld,%ld,%ld\r\n",
+                     (unsigned long)frameNumber,
+                     (unsigned long)numTargets,
+                     (long)result->trackerOutParams.tList[i].tid,
+                     (long)(result->trackerOutParams.tList[i].posX * 1000.0f),
+                     (long)(result->trackerOutParams.tList[i].posY * 1000.0f),
+                     (long)(result->trackerOutParams.tList[i].velX * 1000.0f),
+                     (long)(result->trackerOutParams.tList[i].velY * 1000.0f));
+
+            MinimalRadar_sendText(txBuffer);
+        }
+    }
+}
 void MinimalRadar_runStage(void)
 {
     int32_t retVal;
@@ -1011,7 +1050,7 @@ while (1)
              */
         }
     }
-    uint32_t i;
+
     // float X[10];
     // float Y[10];
     // float Vx[10];
@@ -1027,35 +1066,43 @@ while (1)
     //         Vy[i] = result->trackerOutParams.tList[i].velY;
     //     }
     // }
-
-    uint32_t numTargets;
-
-    numTargets = result->trackerOutParams.numTargets;
-
-    if (numTargets > MAX_RADAR_OBJECTS)
-    {
-        numTargets = MAX_RADAR_OBJECTS;
-    }
-
-    for (i = 0U; i < numTargets; i++)
-    {
-        RadarObject_t object = {0};
-
-        object.x  = result->trackerOutParams.tList[i].posX;
-        object.y  = result->trackerOutParams.tList[i].posY;
-
-        object.vx = result->trackerOutParams.tList[i].velX;
-        object.vy = result->trackerOutParams.tList[i].velY;
-
-        radarObjects[i] = object;
-    }
+    
     /******************************************************
      * G. CURRENT FRAME FINISHED
      ******************************************************/
+    // uint32_t i;
+    // uint32_t numTargets;
+
+    // numTargets = result->trackerOutParams.numTargets;
+    // MinimalRadar_sendTrackerOutput(gFrameCounter,result);
+    // if (numTargets > MAX_RADAR_OBJECTS)
+    // {
+    //     numTargets = MAX_RADAR_OBJECTS;
+    // }
+
+    // for (i = 0U; i < numTargets; i++)
+    // {
+    //     RadarObject_t object = {0};
+
+    //     object.x  = result->trackerOutParams.tList[i].posX;
+    //     object.y  = result->trackerOutParams.tList[i].posY;
+
+    //     object.vx = result->trackerOutParams.tList[i].velX;
+    //     object.vy = result->trackerOutParams.tList[i].velY;
+
+    //     radarObjects[i] = object;
+    //         MinimalRadar_sendTrackerOutput(gFrameCounter,result);
+    // }
+    MinimalRadar_sendTrackerOutput(gFrameCounter,result);
     gFrameCounter++;
     /******************************************************
      * H. TRIGGER RANGE FOR NEXT FRAME
      ******************************************************/
+    if (gMmwMssMCB.interSubFrameProcToken > 0U)
+    {
+        gMmwMssMCB.interSubFrameProcToken--;
+    }
+
     retVal = DPU_RangeProcHWA_control(
         gMmwMssMCB.rangeProcDpuHandle,
         DPU_RangeProcHWA_Cmd_triggerProc,
