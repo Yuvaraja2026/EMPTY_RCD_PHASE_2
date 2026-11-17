@@ -189,8 +189,6 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.numRangeBins = 64U; /* real-only: pow2(128)/2 */
     gMmwMssMCB.isBpmEnabled = 1U;
 
-    gMmwMssMCB.numDopplerBins = 2U;
-
     gMmwMssMCB.profileTimeCfg.h_ChirpIdleTime = 60U; /* 6.00 us * 10 */
     gMmwMssMCB.profileTimeCfg.h_ChirpAdcStartTime = (28U << 10);
     gMmwMssMCB.profileTimeCfg.xh_ChirpTxStartTime = 0U;
@@ -595,22 +593,6 @@ void MinimalRadar_runStage(void)
     if (mmwDemo_flashInit() < 0) { while (1) { } }
     MinimalRadar_sendText("Flash init OK\r\n");
 
-    //     /* Factory-calibration implementation */
-    // if (mmwDemo_factoryCal() < 0) { while (1) { } }
-    // MinimalRadar_sendText("Factory calibration OK\r\n");
-
-    //     /* T018: open RF module only after mmwOpenCfg is populated from the reference control code. */
-    // if (MMWave_open(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwOpenCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
-    // MinimalRadar_sendText("MMWave open OK\r\n");
-
-    // /* T019-T021 use the exact reference helper; see ti_reference_extract.c. */
-    // Mmwave_populateDefaultChirpControlCfg(&gMmwMssMCB.mmwCtrlCfg);
-    // /* Stop after profile creation and inspect frameCfg[0].profileHandle[0]. */
-    // MinimalRadar_sendText("populated default chirp control cfg.\r\n");
-
-    // /*Configure MMWave control parameters and halt on configuration failure */
-    // if (MMWave_config(gMmwMssMCB.ctrlHandle, &gMmwMssMCB.mmwCtrlCfg, (int32_t *)&gMmwaveErrCode) < 0) { while (1) { } }
-
         {
         float scale;
         float rfBandwidth;
@@ -657,8 +639,8 @@ void MinimalRadar_runStage(void)
 
     /* 4. Factory-calibration defaults */
 
-    gMmwMssMCB.factoryCalCfg.saveEnable = 1U;
-    gMmwMssMCB.factoryCalCfg.restoreEnable = 0U;
+    gMmwMssMCB.factoryCalCfg.saveEnable = 0U;
+    gMmwMssMCB.factoryCalCfg.restoreEnable = 1U;
     gMmwMssMCB.factoryCalCfg.rxGain = 40U;
     gMmwMssMCB.factoryCalCfg.txBackoffSel = 0U;
     gMmwMssMCB.factoryCalCfg.flashOffset =
@@ -874,16 +856,7 @@ void MinimalRadar_runStage(void)
 
     if(DPU_TrackerProc_config(gMmwMssMCB.trackerProcDpuHandle, &gMmwMssMCB.trackerCfg)< 0) { while (1) { } }
     MinimalRadar_sendText("mmwDemo_trackerConfig ok\r\n");
-    volatile uint32_t *cubeTest;
-
-    cubeTest =
-        (volatile uint32_t *)gMmwMssMCB.radarCube[0].data;
-
-    /* Full 32-bit writes for the test */
-    cubeTest[0]   = 0xA5A5A5A5U;
-    cubeTest[1]   = 0x5A5A5A5AU;
-    cubeTest[2]   = 0x12345678U;
-    cubeTest[100] = 0xABCDEF01U;
+    
     /** Trigger RangeProc HWA processing */
     if (DPU_RangeProcHWA_control(gMmwMssMCB.rangeProcDpuHandle, DPU_RangeProcHWA_Cmd_triggerProc, NULL, 0U) < 0) { while (1) { } }
     MinimalRadar_sendText("DPU_RangeProcHWA_control and trigger ok\r\n");
@@ -898,10 +871,6 @@ void MinimalRadar_runStage(void)
     /** Initialize RangeProc output parameters to zero */
     memset((void*)&rangeOut, 0, sizeof(rangeOut));
     MinimalRadar_sendText("Before process\r\n");
-    // float X[10];
-    // float Y[10];
-    // float Vx[10];
-    // float Vy[10];
 
 while (1)
 {
@@ -919,28 +888,7 @@ while (1)
     {
         while (1) {}
     }
-    gHwaBank0NonZero =
-        MinimalRadar_countNonZero32(
-            CSL_APP_HWA_DMA0_RAM_BANK0_BASE);
-
-    gHwaBank1NonZero =
-        MinimalRadar_countNonZero32(
-            CSL_APP_HWA_DMA0_RAM_BANK1_BASE);
-
-    gHwaBank2NonZero =
-        MinimalRadar_countNonZero32(
-            CSL_APP_HWA_DMA0_RAM_BANK2_BASE);
-
-    gHwaBank3NonZero =
-        MinimalRadar_countNonZero32(
-            CSL_APP_HWA_DMA0_RAM_BANK3_BASE);
-
-    /* BREAKPOINT HERE */
-
-    (void)gHwaBank0NonZero;
-    (void)gHwaBank1NonZero;
-    (void)gHwaBank2NonZero;
-    (void)gHwaBank3NonZero;
+    
     /******************************************************
      * B. DoA / DOPPLER PROCESSING
      ******************************************************/
@@ -956,39 +904,7 @@ while (1)
     {
         while (1) {}
     }
-    volatile uint32_t gDetMatrixNonZero = 0U;
-    volatile uint32_t gDetMatrixMax = 0U;
-    volatile uint32_t gDetMatrixMaxIndex = 0U;
-    {
-        uint32_t *det;
-        uint32_t count;
-        uint32_t i;
 
-        det = (uint32_t *)gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE].data;
-
-        count =
-            gMmwMssMCB.detMatrix[MMW_DEMO_MAJOR_MODE].dataSize /
-            sizeof(uint32_t);
-
-        gDetMatrixNonZero = 0U;
-        gDetMatrixMax = 0U;
-        gDetMatrixMaxIndex = 0U;
-
-        for (i = 0U; i < count; i++)
-        {
-            if (det[i] != 0U)
-            {
-                gDetMatrixNonZero++;
-            }
-
-            if (det[i] > gDetMatrixMax)
-            {
-                gDetMatrixMax = det[i];
-                gDetMatrixMaxIndex = i;
-            }
-        }
-    }
-    (void)gDetMatrixMaxIndex;
     /******************************************************
      * C. PREPARE CFAR OUTPUT POINTERS
      ******************************************************/
@@ -1051,48 +967,12 @@ while (1)
         }
     }
 
-    // float X[10];
-    // float Y[10];
-    // float Vx[10];
-    // float Vy[10];
-    // if (result->trackerOutParams.numTargets > 0U)
-    // {
-    //     for (i = 0U; i < result->trackerOutParams.numTargets; i++)
-    //     {
-    //         X[i]  = result->trackerOutParams.tList[i].posX;
-    //         Y[i]  = result->trackerOutParams.tList[i].posY;
 
-    //         Vx[i] = result->trackerOutParams.tList[i].velX;
-    //         Vy[i] = result->trackerOutParams.tList[i].velY;
-    //     }
-    // }
     
     /******************************************************
      * G. CURRENT FRAME FINISHED
      ******************************************************/
-    // uint32_t i;
-    // uint32_t numTargets;
 
-    // numTargets = result->trackerOutParams.numTargets;
-    // MinimalRadar_sendTrackerOutput(gFrameCounter,result);
-    // if (numTargets > MAX_RADAR_OBJECTS)
-    // {
-    //     numTargets = MAX_RADAR_OBJECTS;
-    // }
-
-    // for (i = 0U; i < numTargets; i++)
-    // {
-    //     RadarObject_t object = {0};
-
-    //     object.x  = result->trackerOutParams.tList[i].posX;
-    //     object.y  = result->trackerOutParams.tList[i].posY;
-
-    //     object.vx = result->trackerOutParams.tList[i].velX;
-    //     object.vy = result->trackerOutParams.tList[i].velY;
-
-    //     radarObjects[i] = object;
-    //         MinimalRadar_sendTrackerOutput(gFrameCounter,result);
-    // }
     MinimalRadar_sendTrackerOutput(gFrameCounter,result);
     gFrameCounter++;
     /******************************************************
