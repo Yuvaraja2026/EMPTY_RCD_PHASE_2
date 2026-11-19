@@ -29,6 +29,18 @@
 
 #define MAX_RADAR_OBJECTS 10U
 #define TRACKER_UART_BUFFER_SIZE  128U
+
+/* Initial development thresholds */
+#define TTC_COLLISION_CORRIDOR_MM    1000
+#define TTC_MIN_CLOSING_SPEED_MMPS   100
+
+/* Current firmware range selection: 0.1 m to 4.0 m */
+#define TTC_MIN_Y_MM                 100
+#define TTC_MAX_Y_MM                 4000
+
+#define TTC_WARNING_MS               4000
+#define TTC_CRITICAL_MS              2000
+
 RadarObject_t radarObjects[MAX_RADAR_OBJECTS] = {0};
 /* Inform the compiler that the global Master Subsystem Control Block is defined in another file */
 extern MmwDemo_MSS_MCB gMmwMssMCB;
@@ -489,13 +501,113 @@ static void MinimalRadar_sendText(const char *text)
     (void)UART_write(gUartHandle[0], &transaction);    /** Send the text through UART */
 
 }
+    /* Convert classification into UART text */
+static const char *MinimalRadar_getTtcResultText(
+        TTC_Result_t result)
+    {
+        switch (result)
+        {
+            case TTC_RESULT_WARNING:
+                return "WARNING";
+
+            case TTC_RESULT_CRITICAL:
+                return "CRITICAL";
+
+            case TTC_RESULT_SAFE:
+            default:
+                return "SAFE";
+        }
+    }
+
+
+    /* Calculate TTC for one tracked object */
+
+static TTC_Result_t MinimalRadar_calculateTtc(
+        int32_t X_mm,
+        int32_t Y_mm,
+        int32_t Vy_mmps,
+        int32_t *TTC_ms)
+    {
+        int64_t closingSpeed_mmps;
+        int64_t calculatedTtc;
+
+        /* Default: invalid TTC and SAFE */
+
+        *TTC_ms = -1;
+
+        /* Check monitored longitudinal distance */
+
+        if ((Y_mm < TTC_MIN_Y_MM) ||
+            (Y_mm > TTC_MAX_Y_MM))
+        {
+            return TTC_RESULT_SAFE;
+        }
+
+        /* Check lateral collision corridor */
+
+        if ((X_mm < -TTC_COLLISION_CORRIDOR_MM) ||
+            (X_mm > TTC_COLLISION_CORRIDOR_MM))
+        {
+            return TTC_RESULT_SAFE;
+        }
+
+        /* Negative Vy means approaching.
+        * Positive Vy means moving away.
+        */
+
+        if (Vy_mmps >= -TTC_MIN_CLOSING_SPEED_MMPS)
+        {
+            return TTC_RESULT_SAFE;
+        }
+
+        /* Calculate positive closing speed */
+
+        closingSpeed_mmps = -(int64_t)Vy_mmps;
+
+        /* Calculate TTC in milliseconds.
+        *
+        * TTC_ms = (Y_mm * 1000) / closing speed
+        */
+
+        calculatedTtc =
+            ((int64_t)Y_mm * 1000LL) / closingSpeed_mmps;
+
+        *TTC_ms = (int32_t)calculatedTtc;
+
+        /* SAFE / WARNING / CRITICAL classification */
+
+        if (*TTC_ms <= TTC_CRITICAL_MS)
+        {
+            return TTC_RESULT_CRITICAL;
+        }
+        else if (*TTC_ms <= TTC_WARNING_MS)
+        {
+            return TTC_RESULT_WARNING;
+        }
+        else
+        {
+            return TTC_RESULT_SAFE;
+        }
+}
 static void MinimalRadar_sendTrackerOutput(
     uint32_t frameNumber,
     DPC_ObjectDetection_ExecuteResult *result)
 {
     char txBuffer[TRACKER_UART_BUFFER_SIZE];
+
     uint32_t i;
     uint32_t numTargets;
+
+    static bool headerSent = false;
+
+    int32_t X_mm;
+    int32_t Y_mm;
+    int32_t Vy_mmps;
+    int32_t TTC_ms;
+
+    TTC_Result_t ttcResult;
+
+    const char *resultText;
 
     numTargets = result->trackerOutParams.numTargets;
 
@@ -504,30 +616,55 @@ static void MinimalRadar_sendTrackerOutput(
         numTargets = MAX_RADAR_OBJECTS;
     }
 
-    if (numTargets == 0U)
+    /* Send CSV header once */
+
+    if (!headerSent)
     {
-        snprintf(txBuffer, sizeof(txBuffer),
-                 "T,%lu,0,-1,0,0,0,0\r\n",
-                 (unsigned long)frameNumber);
+        MinimalRadar_sendText(
+            "Frame,TID,X_mm,Y_mm,Vy_mmps,TTC_ms,result\r\n");
+
+        headerSent = true;
+    }
+
+    /* Process every final tracked object */
+
+    for (i = 0U; i < numTargets; i++)
+    {
+        /* Convert Tracker values into required units */
+
+        X_mm = (int32_t)(result->trackerOutParams.tList[i].posX * 1000.0f);
+
+        Y_mm = (int32_t)(result->trackerOutParams.tList[i].posY * 1000.0f);
+
+        Vy_mmps = (int32_t)(result->trackerOutParams.tList[i].velY * 1000.0f);
+
+        /* Calculate TTC */
+
+        ttcResult = MinimalRadar_calculateTtc(
+            X_mm,
+            Y_mm,
+            Vy_mmps,
+            &TTC_ms);
+
+        /* Get SAFE / WARNING / CRITICAL text */
+
+        resultText = MinimalRadar_getTtcResultText(ttcResult);
+
+        /* Prepare CSV output */
+
+        snprintf(txBuffer,sizeof(txBuffer),"%lu,%ld,%ld,%ld,%ld,%ld,%s\r\n",
+            (unsigned long)frameNumber,
+            (long)result->trackerOutParams.tList[i].tid,
+            (long)X_mm,
+            (long)Y_mm,
+            (long)Vy_mmps,
+            (long)TTC_ms,
+            resultText
+        );
+
+        /* Send through UART */
 
         MinimalRadar_sendText(txBuffer);
-    }
-    else
-    {
-        for (i = 0U; i < numTargets; i++)
-        {
-            snprintf(txBuffer, sizeof(txBuffer),
-                     "T,%lu,%lu,%ld,%ld,%ld,%ld,%ld\r\n",
-                     (unsigned long)frameNumber,
-                     (unsigned long)numTargets,
-                     (long)result->trackerOutParams.tList[i].tid,
-                     (long)(result->trackerOutParams.tList[i].posX * 1000.0f),
-                     (long)(result->trackerOutParams.tList[i].posY * 1000.0f),
-                     (long)(result->trackerOutParams.tList[i].velX * 1000.0f),
-                     (long)(result->trackerOutParams.tList[i].velY * 1000.0f));
-
-            MinimalRadar_sendText(txBuffer);
-        }
     }
 }
 void MinimalRadar_runStage(void)
