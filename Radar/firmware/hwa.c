@@ -197,7 +197,7 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.profileComCfg.c_ChirpRxHpfSel = 0U;
     gMmwMssMCB.profileComCfg.c_MiscSettings = 0U;
     gMmwMssMCB.profileComCfg.c_HpfFastInitDuration = 15U;
-    gMmwMssMCB.adcSamplingRate = 100.0f / 20.0f;
+    gMmwMssMCB.adcSamplingRate = 6.7f;//100.0f / 20.0f;
     gMmwMssMCB.numRangeBins = 64U; /* real-only: pow2(128)/2 */
     gMmwMssMCB.isBpmEnabled = 1U;
 
@@ -214,7 +214,7 @@ static void MinimalRadar_loadRfDefaults(void)
     gMmwMssMCB.profileTimeCfg.xh_ChirpRfFreqSlope = (uint32_t)((90.0f * 1048576.0f) / (4.0f * 100.0f * 100.0f));
     gMmwMssMCB.profileTimeCfg.w_ChirpRfFreqStart = (uint32_t)((77.0f * 1000.0f * 256.0f) / 400.0f);
 
-    gMmwMssMCB.frameCfg.h_NumOfChirpsInBurst = 8U;
+    gMmwMssMCB.frameCfg.h_NumOfChirpsInBurst = 4U;
     gMmwMssMCB.frameCfg.c_NumOfChirpsAccum = 0U;
     gMmwMssMCB.burstPeriod = 403.0f;
     gMmwMssMCB.frameCfg.h_NumOfBurstsInFrame = 1U;
