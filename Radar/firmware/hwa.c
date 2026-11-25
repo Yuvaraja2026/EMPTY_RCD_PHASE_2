@@ -627,7 +627,12 @@ static void MinimalRadar_sendTrackerOutput(
     }
 
     /* Process every final tracked object */
-
+    if (numTargets == 0U)
+    {
+        snprintf(txBuffer,sizeof(txBuffer),"%lu,-1,,,,,NO_TARGET\r\n",(unsigned long)frameNumber);
+        MinimalRadar_sendText(txBuffer);
+        return;
+    }
     for (i = 0U; i < numTargets; i++)
     {
         /* Convert Tracker values into required units */
@@ -663,7 +668,6 @@ static void MinimalRadar_sendTrackerOutput(
         );
 
         /* Send through UART */
-
         MinimalRadar_sendText(txBuffer);
     }
 }
